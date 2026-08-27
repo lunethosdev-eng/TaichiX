@@ -2,7 +2,9 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -10,48 +12,88 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ─────────────────────────────────────────────
+      # 1. Descargar el código
+      # ─────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ─────────────────────────────────────────────
+      # 2. Configurar Node.js
+      # ─────────────────────────────────────────────
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
+      # ─────────────────────────────────────────────
+      # 3. Instalar dependencias
+      # ─────────────────────────────────────────────
       - name: Install dependencies
-        run: npm install          # ← cambia npm ci por npm install
+        run: npm install
 
+      # ─────────────────────────────────────────────
+      # 4. Construir aplicación web
+      # ─────────────────────────────────────────────
       - name: Build web assets
         run: npm run build
 
+      # ─────────────────────────────────────────────
+      # 5. Configurar Java
+      # ─────────────────────────────────────────────
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'      # Capacitor suele ir mejor con 17 que con 21
+          java-version: '17'
 
+      # ─────────────────────────────────────────────
+      # 6. Configurar Android SDK
+      # ─────────────────────────────────────────────
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      # ─────────────────────────────────────────────
+      # 7. Configurar Capacitor Android
+      # ─────────────────────────────────────────────
       - name: Add Capacitor Android platform
+        shell: bash
         run: |
+          set -e
+
           npx cap add android || true
-          # Copia el plugin nativo
+
+          echo "Preparing native plugin directory..."
+
           mkdir -p android/app/src/main/java/com/taichix/app/plugins
-          cp android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java \
-             android/app/src/main/java/com/taichix/app/plugins/ || true
+
+          if [ -f "android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java" ]; then
+            cp \
+              android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java \
+              android/app/src/main/java/com/taichix/app/plugins/
+          else
+            echo "ServerNativePlugin.java not found, continuing..."
+          fi
+
           npx cap sync android
 
+      # ─────────────────────────────────────────────
+      # 8. Construir APK Debug
+      # ─────────────────────────────────────────────
       - name: Build debug APK
         working-directory: android
+        shell: bash
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
+      # ─────────────────────────────────────────────
+      # 9. Publicar APK
+      # ─────────────────────────────────────────────
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: taichix-apk
           path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
           retention-days: 30
