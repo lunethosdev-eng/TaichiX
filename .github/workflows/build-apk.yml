@@ -57,9 +57,30 @@ jobs:
             cp \
               android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java \
               android/app/src/main/java/com/taichix/app/plugins/
+            echo "✅ ServerNativePlugin.java copiado exitosamente"
           else
-            echo "ServerNativePlugin.java not found, continuing..."
+            echo "❌ ERROR: ServerNativePlugin.java no encontrado"
+            exit 1
           fi
+
+          # Crear capacitor.plugins.json para registrar el plugin
+          mkdir -p android/app/src/main/assets
+          cat > android/app/src/main/assets/capacitor.plugins.json << 'EOF'
+          {
+            "plugins": [
+              {
+                "pkg": "@capacitor/core",
+                "classpath": "com.getcapacitor.Plugin"
+              },
+              {
+                "pkg": "com.taichix.app",
+                "classpath": "com.taichix.app.plugins.ServerNativePlugin"
+              }
+            ]
+          }
+          EOF
+
+          echo "✅ capacitor.plugins.json creado"
 
           npx cap sync android
 
