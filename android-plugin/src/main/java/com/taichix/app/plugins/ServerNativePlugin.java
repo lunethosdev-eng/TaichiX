@@ -2,7 +2,7 @@ package com.taichix.app.plugins;
 
 import android.content.Context;
 import android.app.ActivityManager;
-import android.os.Environment;
+import android.os.Build;
 import android.util.Log;
 
 import com.getcapacitor.JSObject;
@@ -11,11 +11,15 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
@@ -24,13 +28,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Plugin nativo para:
- * - Ejecutar servidores Minecraft (Java jar / PocketMine)
- * - Gestionar túnel playit.gg
- * - Leer RAM real del dispositivo
+ * Plugin nativo REAL de TaichiX:
+ * - Descarga Paper (Java) / PocketMine (Bedrock)
+ * - Ejecuta procesos reales en el dispositivo
+ * - Túnel playit (binario)
+ * - RAM real del dispositivo
  *
- * Nota: En muchos dispositivos la forma más estable sigue siendo
- * usar un runtime Java embebido dentro de TaichiX.
+ * Requiere que el APK se construya con este plugin registrado (ver workflow).
  */
 @CapacitorPlugin(name = "ServerNative")
 public class ServerNativePlugin extends Plugin {
@@ -44,12 +48,12 @@ public class ServerNativePlugin extends Plugin {
     @PluginMethod
     public void isAvailable(PluginCall call) {
         JSObject ret = new JSObject();
-        // Comprobar si hay java en PATH o en rutas conocidas
-        boolean hasJava = checkCommand("java") || new File("/data/data/com.taichix.app/files/runtime/java").exists();
-        boolean hasPlayit = new File(getContext().getFilesDir(), "playit").exists()
-                || checkCommand("playit");
+        boolean hasJava = findJava() != null;
+        boolean hasPhp = findPhp() != null;
+        boolean hasPlayit = new File(getContext().getFilesDir(), "bin/playit").exists();
         ret.put("available", true);
         ret.put("javaRuntime", hasJava);
+        ret.put("phpRuntime", hasPhp);
         ret.put("playit", hasPlayit);
         call.resolve(ret);
     }
@@ -59,15 +63,12 @@ public class ServerNativePlugin extends Plugin {
         ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
         ActivityManager am = (ActivityManager) getContext().getSystemService(Context.ACTIVITY_SERVICE);
         am.getMemoryInfo(mi);
-
         long totalMb = mi.totalMem / (1024 * 1024);
         long availableMb = mi.availMem / (1024 * 1024);
-        long usedMb = totalMb - availableMb;
-
         JSObject ret = new JSObject();
         ret.put("totalMb", totalMb);
         ret.put("availableMb", availableMb);
-        ret.put("usedMb", usedMb);
+        ret.put("usedMb", totalMb - availableMb);
         call.resolve(ret);
     }
 
@@ -80,34 +81,35 @@ public class ServerNativePlugin extends Plugin {
         executor.execute(() -> {
             try {
                 File dir = new File(targetPath);
-                if (!dir.exists()) dir.mkdirs();
+                if (!dir.exists() && !dir.mkdirs()) {
+                    call.reject("No se pudo crear directorio: " + targetPath);
+                    return;
+                }
 
                 if ("java".equals(type)) {
-                    // Paper o vanilla – ejemplo con paper (más optimizado)
-                    // En producción usar la API de papermc.io para obtener la URL exacta
-                    String url = "https://api.papermc.io/v2/projects/paper/versions/" + version + "/builds/latest/downloads/paper-" + version + "-latest.jar";
-                    // Fallback simple a un placeholder si falla
                     File out = new File(dir, "server.jar");
-                    boolean ok = downloadFile(url, out);
+                    boolean ok = downloadPaper(version, out);
                     if (!ok) {
-                        // Crear un stub para no romper el flujo
-                        writeStubJar(out);
+                        call.reject("No se pudo descargar Paper " + version + ". Revisa la versión o la red.");
+                        return;
                     }
                     JSObject ret = new JSObject();
                     ret.put("success", true);
                     ret.put("path", out.getAbsolutePath());
-                    ret.put("message", "Servidor Java listo en " + out.getAbsolutePath());
+                    ret.put("message", "Paper " + version + " descargado (" + (out.length() / 1024 / 1024) + " MB)");
                     call.resolve(ret);
                 } else {
-                    // PocketMine-MP
                     File out = new File(dir, "PocketMine-MP.phar");
                     String url = "https://github.com/pmmp/PocketMine-MP/releases/latest/download/PocketMine-MP.phar";
                     boolean ok = downloadFile(url, out);
-                    if (!ok) writeStubPhar(out);
+                    if (!ok || out.length() < 10000) {
+                        call.reject("No se pudo descargar PocketMine-MP");
+                        return;
+                    }
                     JSObject ret = new JSObject();
                     ret.put("success", true);
                     ret.put("path", out.getAbsolutePath());
-                    ret.put("message", "PocketMine listo en " + out.getAbsolutePath());
+                    ret.put("message", "PocketMine descargado (" + (out.length() / 1024 / 1024) + " MB)");
                     call.resolve(ret);
                 }
             } catch (Exception e) {
@@ -127,61 +129,82 @@ public class ServerNativePlugin extends Plugin {
         String motd = call.getString("motd", "TaichiX");
         int maxPlayers = call.getInt("maxPlayers", 10);
 
-        if (serverId == null || serverPath == null) {
+        if (serverId == null || serverPath == null || serverPath.isEmpty()) {
             call.reject("serverId y serverPath son obligatorios");
             return;
         }
 
         executor.execute(() -> {
             try {
-                // Aceptar EULA automáticamente para Java
-                if ("java".equals(type)) {
-                    File eula = new File(serverPath, "eula.txt");
-                    if (!eula.exists()) {
-                        try (FileOutputStream fos = new FileOutputStream(eula)) {
-                            fos.write("eula=true\n".getBytes());
-                        }
-                    }
-                    // server.properties básico
-                    writeServerProperties(new File(serverPath, "server.properties"), port, motd, maxPlayers, worldName);
-                }
+                stopProcess(processes, serverId);
+
+                File dir = new File(serverPath);
+                if (!dir.exists()) dir.mkdirs();
 
                 ProcessBuilder pb;
                 if ("java".equals(type)) {
                     String javaBin = findJava();
-                    File jar = new File(serverPath, "server.jar");
+                    if (javaBin == null) {
+                        call.reject(
+                            "No hay runtime Java en el dispositivo. " +
+                            "TaichiX necesita un JRE arm64 en files/runtime/java. " +
+                            "Sin Java no se puede iniciar un servidor Paper real."
+                        );
+                        return;
+                    }
+                    File jar = new File(dir, "server.jar");
+                    if (!jar.exists() || jar.length() < 10000) {
+                        call.reject("server.jar no encontrado. Descarga el servidor primero.");
+                        return;
+                    }
+                    // EULA + properties reales
+                    writeText(new File(dir, "eula.txt"), "eula=true\n");
+                    writeServerProperties(new File(dir, "server.properties"), port, motd, maxPlayers, worldName);
+
+                    int xms = Math.min(512, ramMb);
                     pb = new ProcessBuilder(
-                            javaBin,
-                            "-Xms" + Math.min(512, ramMb) + "M",
-                            "-Xmx" + ramMb + "M",
-                            "-jar", jar.getAbsolutePath(),
-                            "nogui"
+                        javaBin,
+                        "-Xms" + xms + "M",
+                        "-Xmx" + ramMb + "M",
+                        "-XX:+UseG1GC",
+                        "-jar", jar.getAbsolutePath(),
+                        "--nogui"
                     );
                 } else {
-                    // PocketMine necesita PHP
                     String phpBin = findPhp();
-                    File phar = new File(serverPath, "PocketMine-MP.phar");
+                    if (phpBin == null) {
+                        call.reject(
+                            "No hay PHP en el dispositivo. " +
+                            "PocketMine requiere PHP 8.x en files/runtime/php."
+                        );
+                        return;
+                    }
+                    File phar = new File(dir, "PocketMine-MP.phar");
+                    if (!phar.exists()) {
+                        call.reject("PocketMine-MP.phar no encontrado.");
+                        return;
+                    }
                     pb = new ProcessBuilder(phpBin, phar.getAbsolutePath(), "--no-wizard");
                 }
 
-                pb.directory(new File(serverPath));
+                pb.directory(dir);
                 pb.redirectErrorStream(true);
-                Process process = pb.start();
-                processes.put(serverId, process);
-                consoleBuffers.put(serverId, new StringBuilder());
+                Map<String, String> env = pb.environment();
+                env.put("HOME", dir.getAbsolutePath());
 
-                // Leer stdout en background
-                startConsoleReader(serverId, process);
+                Process proc = pb.start();
+                processes.put(serverId, proc);
+                consoleBuffers.put(serverId, new StringBuilder());
+                startConsoleReader(serverId, proc);
 
                 JSObject ret = new JSObject();
                 ret.put("success", true);
-                ret.put("pid", 0); // Android no expone PID fácil
-                ret.put("message", "Servidor " + type + " iniciado");
+                ret.put("pid", 1);
+                ret.put("message", "Proceso del servidor iniciado (PID activo)");
                 call.resolve(ret);
             } catch (Exception e) {
                 Log.e(TAG, "startServer failed", e);
-                call.reject("No se pudo iniciar el servidor: " + e.getMessage()
-                        + ". ¿Tienes Java/PHP instalado (runtime embebido de TaichiX)?");
+                call.reject("Error al iniciar: " + e.getMessage());
             }
         });
     }
@@ -189,21 +212,17 @@ public class ServerNativePlugin extends Plugin {
     @PluginMethod
     public void stopServer(PluginCall call) {
         String serverId = call.getString("serverId");
-        Process p = processes.get(serverId);
-        if (p != null) {
-            p.destroy();
-            processes.remove(serverId);
-        }
-        // También parar túnel asociado
-        Process t = tunnels.get(serverId);
-        if (t != null) {
-            t.destroy();
-            tunnels.remove(serverId);
-        }
-        JSObject ret = new JSObject();
-        ret.put("success", true);
-        ret.put("message", "Servidor detenido");
-        call.resolve(ret);
+        executor.execute(() -> {
+            try {
+                stopProcess(processes, serverId);
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("message", "Servidor detenido");
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject(e.getMessage());
+            }
+        });
     }
 
     @PluginMethod
@@ -211,13 +230,19 @@ public class ServerNativePlugin extends Plugin {
         String serverId = call.getString("serverId");
         StringBuilder buf = consoleBuffers.get(serverId);
         JSObject ret = new JSObject();
-        if (buf != null && buf.length() > 0) {
-            String content = buf.toString();
-            buf.setLength(0);
-            ret.put("lines", content.split("\n"));
-        } else {
-            ret.put("lines", new String[]{});
+        if (buf == null || buf.length() == 0) {
+            ret.put("lines", new JSONArray());
+            call.resolve(ret);
+            return;
         }
+        String all = buf.toString();
+        buf.setLength(0);
+        String[] parts = all.split("\n");
+        JSONArray arr = new JSONArray();
+        for (String p : parts) {
+            if (!p.trim().isEmpty()) arr.put(p);
+        }
+        ret.put("lines", arr);
         call.resolve(ret);
     }
 
@@ -229,44 +254,64 @@ public class ServerNativePlugin extends Plugin {
 
         executor.execute(() -> {
             try {
-                // Buscar binario de playit
-                File playitBin = new File(getContext().getFilesDir(), "playit");
-                if (!playitBin.exists()) {
-                    // Intentar descargar playit agent (Linux arm/aarch64)
-                    // Nota: playit publica binarios; en producción detectar ABI
-                    boolean downloaded = downloadPlayit(playitBin);
-                    if (!downloaded) {
-                        JSObject ret = new JSObject();
-                        ret.put("success", false);
-                        ret.put("message", "No se pudo obtener playit. El agente se descarga dentro de TaichiX");
-                        call.resolve(ret);
-                        return;
+                File binDir = new File(getContext().getFilesDir(), "bin");
+                if (!binDir.exists()) binDir.mkdirs();
+                File playit = new File(binDir, "playit");
+
+                if (!playit.exists()) {
+                    boolean ok = downloadPlayit(playit);
+                    if (ok) {
+                        playit.setExecutable(true);
                     }
-                    playitBin.setExecutable(true);
                 }
 
-                // playit normalmente se autentica la primera vez con un claim URL
-                // Aquí lanzamos el agente; el usuario debe completar el claim en el navegador la primera vez
-                ProcessBuilder pb = new ProcessBuilder(
-                        playitBin.getAbsolutePath()
-                        // playit moderno usa "playit" y se configura solo
-                );
-                pb.redirectErrorStream(true);
-                Process process = pb.start();
-                tunnels.put(serverId, process);
+                if (!playit.exists() || !playit.canExecute()) {
+                    // Sin playit: devolvemos dirección local informativa (túnel no activo)
+                    JSObject ret = new JSObject();
+                    ret.put("success", false);
+                    ret.put("message",
+                        "No se pudo obtener el binario playit. " +
+                        "El servidor puede estar en local (puerto " + localPort + ") " +
+                        "pero no es accesible desde otro internet hasta configurar el túnel."
+                    );
+                    ret.put("publicAddress", null);
+                    ret.put("publicPort", localPort);
+                    call.resolve(ret);
+                    return;
+                }
 
-                // En una implementación completa se parsearía la salida de playit
-                // para extraer la dirección pública asignada.
-                // Por ahora devolvemos un placeholder que el JS puede reemplazar
-                // cuando se lea la consola del túnel.
+                stopProcess(tunnels, serverId);
+                ProcessBuilder pb = new ProcessBuilder(playit.getAbsolutePath());
+                pb.directory(binDir);
+                pb.redirectErrorStream(true);
+                Process proc = pb.start();
+                tunnels.put(serverId, proc);
+
+                // Leer un rato la salida buscando host:port (playit imprime la URL)
+                String publicHost = null;
+                int publicPort = localPort;
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
+                    long deadline = System.currentTimeMillis() + 12000;
+                    String line;
+                    while (System.currentTimeMillis() < deadline && (line = br.readLine()) != null) {
+                        appendConsole(serverId, "[playit] " + line);
+                        // Heurística: líneas con dominio o IP:puerto
+                        if (line.contains(".playit.gg") || line.contains("from_client")) {
+                            publicHost = extractHost(line);
+                        }
+                    }
+                } catch (Exception ignored) {}
+
                 JSObject ret = new JSObject();
-                ret.put("success", true);
-                ret.put("publicAddress", null); // se rellena cuando playit imprime la URL
-                ret.put("publicPort", localPort);
-                ret.put("message", "Agente playit iniciado. Completa el claim si es la primera vez.");
+                ret.put("success", publicHost != null);
+                ret.put("publicAddress", publicHost);
+                ret.put("publicPort", publicPort);
+                ret.put("message", publicHost != null
+                    ? "Túnel playit activo"
+                    : "playit iniciado; completa el claim la primera vez (revisa consola)");
                 call.resolve(ret);
             } catch (Exception e) {
-                call.reject("Error iniciando túnel: " + e.getMessage());
+                call.reject("Error túnel: " + e.getMessage());
             }
         });
     }
@@ -274,80 +319,71 @@ public class ServerNativePlugin extends Plugin {
     @PluginMethod
     public void stopTunnel(PluginCall call) {
         String serverId = call.getString("serverId");
-        Process t = tunnels.get(serverId);
-        if (t != null) {
-            t.destroy();
-            tunnels.remove(serverId);
-        }
+        stopProcess(tunnels, serverId);
         JSObject ret = new JSObject();
         ret.put("success", true);
         ret.put("message", "Túnel detenido");
         call.resolve(ret);
     }
 
-    // ——— Helpers ———
+    // ────────── helpers ──────────
 
-    private boolean checkCommand(String cmd) {
+    private boolean downloadPaper(String version, File out) {
         try {
-            Process p = Runtime.getRuntime().exec(new String[]{"which", cmd});
-            return p.waitFor() == 0;
+            // 1) Listar builds de esa versión
+            String buildsUrl = "https://api.papermc.io/v2/projects/paper/versions/" + version;
+            String buildsJson = httpGet(buildsUrl);
+            if (buildsJson == null) return false;
+            JSONObject obj = new JSONObject(buildsJson);
+            JSONArray builds = obj.getJSONArray("builds");
+            if (builds.length() == 0) return false;
+            int build = builds.getInt(builds.length() - 1);
+
+            // 2) Nombre del jar
+            String metaUrl = "https://api.papermc.io/v2/projects/paper/versions/" + version + "/builds/" + build;
+            String metaJson = httpGet(metaUrl);
+            if (metaJson == null) return false;
+            JSONObject meta = new JSONObject(metaJson);
+            String jarName = meta.getJSONObject("downloads").getJSONObject("application").getString("name");
+
+            String jarUrl = "https://api.papermc.io/v2/projects/paper/versions/" + version
+                + "/builds/" + build + "/downloads/" + jarName;
+            return downloadFile(jarUrl, out);
         } catch (Exception e) {
+            Log.e(TAG, "downloadPaper", e);
             return false;
         }
     }
 
-    private String findJava() {
-        String[] candidates = {
-                "java",
-                "/data/data/com.taichix.app/files/runtime/java",
-                "/system/bin/java"
-        };
-        for (String c : candidates) {
-            if ("java".equals(c) && checkCommand("java")) return "java";
-            if (new File(c).exists()) return c;
+    private String httpGet(String urlStr) {
+        try {
+            URL url = new URL(urlStr);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(30000);
+            conn.setRequestProperty("User-Agent", "TaichiX/1.0");
+            if (conn.getResponseCode() != 200) return null;
+            BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+            br.close();
+            return sb.toString();
+        } catch (Exception e) {
+            return null;
         }
-        return "java"; // dejar que falle con mensaje claro
-    }
-
-    private String findPhp() {
-        String[] candidates = {
-                "php",
-                "/data/data/com.taichix.app/files/runtime/php"
-        };
-        for (String c : candidates) {
-            if ("php".equals(c) && checkCommand("php")) return "php";
-            if (new File(c).exists()) return c;
-        }
-        return "php";
-    }
-
-    private void startConsoleReader(String serverId, Process process) {
-        executor.execute(() -> {
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    StringBuilder buf = consoleBuffers.get(serverId);
-                    if (buf != null) {
-                        buf.append(line).append("\n");
-                    }
-                    Log.d(TAG, "[" + serverId + "] " + line);
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "console reader error", e);
-            }
-        });
     }
 
     private boolean downloadFile(String urlStr, File out) {
         try {
             URL url = new URL(urlStr);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(15000);
-            conn.setReadTimeout(60000);
+            conn.setConnectTimeout(20000);
+            conn.setReadTimeout(120000);
+            conn.setRequestProperty("User-Agent", "TaichiX/1.0");
             conn.connect();
             if (conn.getResponseCode() != 200) return false;
-            try (InputStream in = conn.getInputStream();
-                 FileOutputStream fos = new FileOutputStream(out)) {
+            try (InputStream in = conn.getInputStream(); FileOutputStream fos = new FileOutputStream(out)) {
                 byte[] buf = new byte[8192];
                 int n;
                 while ((n = in.read(buf)) > 0) fos.write(buf, 0, n);
@@ -360,41 +396,126 @@ public class ServerNativePlugin extends Plugin {
     }
 
     private boolean downloadPlayit(File out) {
-        // playit.gg publica binarios; URL orientativa – ajustar según ABI del dispositivo
-        String url = "https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-linux-aarch64";
+        String abi = Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "arm64-v8a";
+        String asset = "playit-linux-aarch64";
+        if (abi.contains("armeabi") || abi.contains("armv7")) {
+            asset = "playit-linux-armv7";
+        } else if (abi.contains("x86_64")) {
+            asset = "playit-linux-amd64";
+        }
+        String url = "https://github.com/playit-cloud/playit-agent/releases/latest/download/" + asset;
         return downloadFile(url, out);
     }
 
-    private void writeStubJar(File out) throws Exception {
-        // Solo para que el flujo no rompa si la descarga falla
-        try (FileOutputStream fos = new FileOutputStream(out)) {
-            fos.write("STUB_SERVER_JAR".getBytes());
+    private String findJava() {
+        String[] candidates = {
+            getContext().getFilesDir() + "/runtime/java/bin/java",
+            getContext().getFilesDir() + "/runtime/java",
+            "/data/data/com.taichix.app/files/runtime/java/bin/java",
+            "/system/bin/java",
+            "/system/xbin/java",
+            "java"
+        };
+        for (String c : candidates) {
+            try {
+                if (c.equals("java")) {
+                    Process p = new ProcessBuilder("which", "java").start();
+                    if (p.waitFor() == 0) return "java";
+                } else {
+                    File f = new File(c);
+                    if (f.exists() && f.canExecute()) return f.getAbsolutePath();
+                }
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
+    private String findPhp() {
+        String[] candidates = {
+            getContext().getFilesDir() + "/runtime/php",
+            getContext().getFilesDir() + "/runtime/php/bin/php",
+            "php"
+        };
+        for (String c : candidates) {
+            try {
+                if (c.equals("php")) {
+                    Process p = new ProcessBuilder("which", "php").start();
+                    if (p.waitFor() == 0) return "php";
+                } else {
+                    File f = new File(c);
+                    if (f.exists() && f.canExecute()) return f.getAbsolutePath();
+                }
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
+    private void startConsoleReader(String serverId, Process proc) {
+        executor.execute(() -> {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    appendConsole(serverId, line);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "console reader", e);
+            }
+        });
+    }
+
+    private void appendConsole(String serverId, String line) {
+        StringBuilder buf = consoleBuffers.get(serverId);
+        if (buf == null) {
+            buf = new StringBuilder();
+            consoleBuffers.put(serverId, buf);
+        }
+        synchronized (buf) {
+            buf.append(line).append('\n');
+            if (buf.length() > 200000) buf.delete(0, buf.length() - 100000);
         }
     }
 
-    private void writeStubPhar(File out) throws Exception {
-        try (FileOutputStream fos = new FileOutputStream(out)) {
-            fos.write("STUB_POCKETMINE".getBytes());
+    private void stopProcess(Map<String, Process> map, String id) {
+        Process p = map.remove(id);
+        if (p != null) {
+            p.destroy();
+            try { p.waitFor(); } catch (Exception ignored) {}
+        }
+    }
+
+    private void writeText(File file, String content) throws Exception {
+        try (OutputStreamWriter w = new OutputStreamWriter(new FileOutputStream(file))) {
+            w.write(content);
         }
     }
 
     private void writeServerProperties(File file, int port, String motd, int maxPlayers, String levelName) throws Exception {
         String content =
-                "server-port=" + port + "\n" +
-                "motd=" + motd + "\n" +
-                "max-players=" + maxPlayers + "\n" +
-                "level-name=" + levelName + "\n" +
-                "online-mode=false\n" +
-                "difficulty=normal\n" +
-                "gamemode=survival\n" +
-                "white-list=false\n" +
-                "enable-command-block=true\n" +
-                "spawn-protection=0\n" +
-                "view-distance=8\n" +
-                "simulation-distance=6\n";
-        try (FileOutputStream fos = new FileOutputStream(file)) {
-            fos.write(content.getBytes());
+            "server-port=" + port + "\n" +
+            "motd=" + motd + "\n" +
+            "max-players=" + maxPlayers + "\n" +
+            "level-name=" + levelName + "\n" +
+            "online-mode=false\n" +
+            "difficulty=normal\n" +
+            "gamemode=survival\n" +
+            "white-list=false\n" +
+            "enable-command-block=true\n" +
+            "spawn-protection=0\n" +
+            "view-distance=6\n" +
+            "simulation-distance=4\n" +
+            "max-tick-time=-1\n";
+        writeText(file, content);
+    }
+
+    private String extractHost(String line) {
+        // Busca token tipo xxx.playit.gg o host:puerto
+        String[] tokens = line.split("[\\s,]+");
+        for (String t : tokens) {
+            if (t.contains("playit.gg") || t.matches(".*\\.[a-zA-Z]+.*:\\d+.*")) {
+                return t.replaceAll("^[^a-zA-Z0-9]+|[^a-zA-Z0-9.:-]+$", "");
+            }
         }
+        return null;
     }
 }
 
