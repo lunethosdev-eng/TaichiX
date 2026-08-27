@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { X, Search, Download, Check, Package, AlertTriangle } from 'lucide-react';
 import type { ModItem, ModLoader, ServerType } from '../types/server';
 import { filterMods } from '../data/modCatalog';
-import { Button, Card, Badge } from './ui';
+import { Button, Card } from './ui';
 
 const CATEGORIES: { id: string; label: string }[] = [
   { id: 'all', label: 'Todos' },
@@ -178,7 +178,7 @@ export function ModStore({
                       <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500">
                         <span>{mod.author}</span>
                         <span>·</span>
-                        <span>~{mod.sizeMb} MB</span>
+                        <span>\~{mod.sizeMb} MB</span>
                       </div>
                     </div>
                     <button
@@ -208,7 +208,7 @@ export function ModStore({
           <div className="text-sm text-slate-400">
             {selectedIds.length === 0
               ? 'Ningún mod seleccionado'
-              : `${selectedIds.length} mod${selectedIds.length > 1 ? 's' : ''} seleccionado${selectedIds.length > 1 ? 's' : ''}`}
+              : `\( {selectedIds.length} mod \){selectedIds.length > 1 ? 's' : ''} seleccionado${selectedIds.length > 1 ? 's' : ''}`}
           </div>
           <Button onClick={onClose}>Listo</Button>
         </div>
