@@ -1,0 +1,10 @@
+[
+  {
+    "pkg": "@capacitor/core",
+    "classpath": "com.getcapacitor.Bridge"
+  },
+  {
+    "pkg": "com.taichix.app",
+    "classpath": "com.taichix.app.plugins.ServerNativePlugin"
+  }
+]
