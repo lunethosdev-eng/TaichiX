@@ -14,6 +14,9 @@ const config: CapacitorConfig = {
     CapacitorHttp: {
       enabled: true,
     },
+    ServerNative: {
+      enabled: true,
+    },
   },
 };
 
