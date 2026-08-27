@@ -9,7 +9,6 @@ export interface StartServerOptions {
   worldName: string;
   motd: string;
   maxPlayers: number;
-  /** Ruta donde están los archivos del servidor en el dispositivo */
   serverPath: string;
 }
 
@@ -20,41 +19,26 @@ export interface TunnelOptions {
 }
 
 export interface ServerNativePlugin {
-  /** Comprueba si el plugin nativo está disponible */
   isAvailable(): Promise<{ available: boolean; javaRuntime: boolean; playit: boolean }>;
-
-  /** Descarga el servidor (jar de Java o PocketMine) si no existe */
   downloadServer(options: {
     type: 'java' | 'bedrock';
     version: string;
     targetPath: string;
   }): Promise<{ success: boolean; path: string; message: string }>;
-
-  /** Inicia el proceso del servidor */
   startServer(options: StartServerOptions): Promise<{
     success: boolean;
     pid?: number;
     message: string;
   }>;
-
-  /** Detiene el proceso del servidor */
   stopServer(options: { serverId: string }): Promise<{ success: boolean; message: string }>;
-
-  /** Lee nuevas líneas de la consola del servidor */
   readConsole(options: { serverId: string }): Promise<{ lines: string[] }>;
-
-  /** Inicia el túnel playit.gg (o compatible) */
   startTunnel(options: TunnelOptions): Promise<{
     success: boolean;
     publicAddress?: string;
     publicPort?: number;
     message: string;
   }>;
-
-  /** Detiene el túnel */
   stopTunnel(options: { serverId: string }): Promise<{ success: boolean; message: string }>;
-
-  /** Obtiene RAM real del dispositivo (nativo) */
   getMemoryInfo(): Promise<{
     totalMb: number;
     availableMb: number;
@@ -62,8 +46,28 @@ export interface ServerNativePlugin {
   }>;
 }
 
-const ServerNative = registerPlugin<ServerNativePlugin>('ServerNative', {
-  web: () => import('./ServerNative.web').then(m => new m.ServerNativeWeb()),
-});
+// Crear plugin con fallback
+let ServerNativePlugin: ServerNativePlugin | null = null;
 
-export default ServerNative;
+try {
+  ServerNativePlugin = registerPlugin<ServerNativePlugin>('ServerNative', {
+    web: () => import('./ServerNative.web').then(m => new m.ServerNativeWeb()),
+  });
+} catch (error) {
+  console.warn('⚠️ ServerNative plugin no disponible, usando fallback web');
+  // Fallback a web
+  import('./ServerNative.web').then(m => {
+    ServerNativePlugin = new m.ServerNativeWeb() as any;
+  });
+}
+
+export default ServerNativePlugin || ({
+  isAvailable: async () => ({ available: false, javaRuntime: false, playit: false }),
+  downloadServer: async () => ({ success: false, path: '', message: 'Plugin no disponible' }),
+  startServer: async () => ({ success: false, message: 'Plugin no disponible' }),
+  stopServer: async () => ({ success: false, message: 'Plugin no disponible' }),
+  readConsole: async () => ({ lines: [] }),
+  startTunnel: async () => ({ success: false, message: 'Plugin no disponible' }),
+  stopTunnel: async () => ({ success: false, message: 'Plugin no disponible' }),
+  getMemoryInfo: async () => ({ totalMb: 0, availableMb: 0, usedMb: 0 }),
+} as ServerNativePlugin);
