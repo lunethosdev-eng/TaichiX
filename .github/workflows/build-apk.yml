@@ -12,50 +12,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ─────────────────────────────────────────────
-      # 1. Descargar el código
-      # ─────────────────────────────────────────────
+      # 1. Checkout
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ─────────────────────────────────────────────
-      # 2. Configurar Node.js
-      # ─────────────────────────────────────────────
+      # 2. Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      # ─────────────────────────────────────────────
       # 3. Instalar dependencias
-      # ─────────────────────────────────────────────
       - name: Install dependencies
         run: npm install
 
-      # ─────────────────────────────────────────────
-      # 4. Construir aplicación web
-      # ─────────────────────────────────────────────
+      # 4. Build web
       - name: Build web assets
         run: npm run build
 
-      # ─────────────────────────────────────────────
-      # 5. Configurar Java
-      # ─────────────────────────────────────────────
+      # 5. Java 21
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
-      # ─────────────────────────────────────────────
-      # 6. Configurar Android SDK
-      # ─────────────────────────────────────────────
+      # 6. Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # ─────────────────────────────────────────────
-      # 7. Configurar Capacitor Android
-      # ─────────────────────────────────────────────
+      # 7. Capacitor Android
       - name: Add Capacitor Android platform
         shell: bash
         run: |
@@ -77,9 +63,7 @@ jobs:
 
           npx cap sync android
 
-      # ─────────────────────────────────────────────
-      # 8. Construir APK Debug
-      # ─────────────────────────────────────────────
+      # 8. Build APK
       - name: Build debug APK
         working-directory: android
         shell: bash
@@ -87,9 +71,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      # ─────────────────────────────────────────────
-      # 9. Publicar APK
-      # ─────────────────────────────────────────────
+      # 9. Subir APK
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
