@@ -40,6 +40,11 @@ jobs:
       # 6. Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+      
+      # 6.5. Aceptar licencias de Android SDK
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       # 7. Capacitor Android
       - name: Add Capacitor Android platform
