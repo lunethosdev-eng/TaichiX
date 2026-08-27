@@ -71,21 +71,19 @@ jobs:
           # Crear capacitor.plugins.json para registrar el plugin
           mkdir -p android/app/src/main/assets
           cat > android/app/src/main/assets/capacitor.plugins.json << 'EOF'
-          {
-            "plugins": [
-              {
-                "pkg": "@capacitor/core",
-                "classpath": "com.getcapacitor.Plugin"
-              },
-              {
-                "pkg": "com.taichix.app",
-                "classpath": "com.taichix.app.plugins.ServerNativePlugin"
-              }
-            ]
-          }
+          [
+            {
+              "pkg": "@capacitor/core",
+              "classpath": "com.getcapacitor.Bridge"
+            },
+            {
+              "pkg": "com.taichix.app",
+              "classpath": "com.taichix.app.plugins.ServerNativePlugin"
+            }
+          ]
           EOF
 
-          echo "✅ capacitor.plugins.json creado"
+          echo "✅ capacitor.plugins.json creado correctamente"
 
           npx cap sync android
 
@@ -105,3 +103,4 @@ jobs:
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
+
