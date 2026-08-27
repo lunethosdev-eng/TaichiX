@@ -17,9 +17,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm install          # ← cambia npm ci por npm install
 
       - name: Build web assets
         run: npm run build
@@ -28,7 +29,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'      # Capacitor suele ir mejor con 17 que con 21
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -36,58 +37,11 @@ jobs:
       - name: Add Capacitor Android platform
         run: |
           npx cap add android || true
+          # Copia el plugin nativo
+          mkdir -p android/app/src/main/java/com/taichix/app/plugins
+          cp android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java \
+             android/app/src/main/java/com/taichix/app/plugins/ || true
           npx cap sync android
-
-      - name: Integrate ServerNative plugin
-        run: |
-          set -e
-          PLUGIN_SRC="android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java"
-          PLUGIN_DEST_DIR="android/app/src/main/java/com/taichix/app/plugins"
-          MAIN_ACTIVITY=$(find android/app/src/main/java -name 'MainActivity.java' | head -1)
-
-          if [ ! -f "$PLUGIN_SRC" ]; then
-            echo "ERROR: No existe $PLUGIN_SRC"
-            exit 1
-          fi
-
-          mkdir -p "$PLUGIN_DEST_DIR"
-          cp "$PLUGIN_SRC" "$PLUGIN_DEST_DIR/ServerNativePlugin.java"
-          echo "Plugin copiado a $PLUGIN_DEST_DIR"
-
-          if [ -z "$MAIN_ACTIVITY" ]; then
-            echo "ERROR: MainActivity.java no encontrado"
-            exit 1
-          fi
-
-          if ! grep -q 'ServerNativePlugin' "$MAIN_ACTIVITY"; then
-            sed -i 's/import com.getcapacitor.BridgeActivity;/import com.getcapacitor.BridgeActivity;\nimport com.taichix.app.plugins.ServerNativePlugin;/' "$MAIN_ACTIVITY"
-
-            if ! grep -q 'onCreate' "$MAIN_ACTIVITY"; then
-              sed -i '/class MainActivity/a\    @Override\n    public void onCreate(android.os.Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        registerPlugin(ServerNativePlugin.class);\n    }' "$MAIN_ACTIVITY"
-            else
-              sed -i '/super.onCreate/a\        registerPlugin(ServerNativePlugin.class);' "$MAIN_ACTIVITY"
-            fi
-            echo "MainActivity parcheado:"
-            cat "$MAIN_ACTIVITY"
-          else
-            echo "Plugin ya registrado en MainActivity"
-          fi
-
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            for PERM in \
-              'android.permission.INTERNET' \
-              'android.permission.ACCESS_NETWORK_STATE' \
-              'android.permission.FOREGROUND_SERVICE' \
-              'android.permission.WAKE_LOCK' \
-              'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS'
-            do
-              if ! grep -q "$PERM" "$MANIFEST"; then
-                sed -i "s|<application|<uses-permission android:name=\"$PERM\" />\n    <application|" "$MANIFEST" || true
-              fi
-            done
-            echo "Manifest actualizado"
-          fi
 
       - name: Build debug APK
         working-directory: android
