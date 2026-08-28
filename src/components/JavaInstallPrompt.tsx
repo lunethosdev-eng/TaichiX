@@ -1,48 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { TermuxJavaInstaller } from '../plugins/TermuxJavaInstaller';
 
 interface JavaInstallPromptProps {
-  serverId: string;
+  serverId?: string;
   onClose: () => void;
-  onJavaInstalled?: () => void;
 }
 
 /**
- * Componente que solicita instalar Java si no está disponible
- * Detecta Termux y facilita la instalación automática
+ * Modal que solicita instalar Java si no está disponible
+ * Facilita la instalación automática via Termux
  */
 export function JavaInstallPrompt({
-  serverId,
   onClose,
-  onJavaInstalled,
 }: JavaInstallPromptProps) {
-  const [hasTermux, setHasTermux] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Detectar si Termux está instalado
-    TermuxJavaInstaller.isTermuxInstalled().then(setHasTermux).catch(() => {
-      setHasTermux(false);
-    });
-  }, []);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   const handleInstallJava = async () => {
     setLoading(true);
     try {
       await TermuxJavaInstaller.installJavaInTermux();
-      // El comando está en el portapapeles y Termux se abrió
-      // Mostrar instrucciones al usuario
-      alert(
-        '✅ Comando copiado al portapapeles\n\n' +
-        'Termux se ha abierto.\n\n' +
-        'Ahora:\n' +
-        '1. Pega el comando (Ctrl+V o toque prolongado)\n' +
-        '2. Presiona Enter\n' +
-        '3. Espera a que termine\n' +
-        '4. Vuelve a TaichiX\n\n' +
-        'Esto instalará Java en tu teléfono (5-10 minutos)'
-      );
     } catch (err) {
       setError(
         'No se pudo abrir Termux. Asegúrate de que esté instalado desde Google Play'
@@ -69,25 +46,17 @@ export function JavaInstallPrompt({
           necesitas instalarlo primero.
         </p>
 
-        {hasTermux ? (
-          <>
-            <p className="text-green-400 text-sm mb-4">
-              ✅ Detectamos que tienes Termux instalado. ¡Perfecto!
-            </p>
+        <p className="text-green-400 text-sm mb-4">
+          ✅ Detectamos que tienes Termux instalado. ¡Perfecto!
+        </p>
 
-            <button
-              onClick={handleInstallJava}
-              disabled={loading}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded mb-3 transition disabled:opacity-50"
-            >
-              {loading ? 'Abriendo Termux...' : '📱 Instalar Java en Termux'}
-            </button>
-          </>
-        ) : (
-          <p className="text-amber-400 text-sm mb-4">
-            💡 Instala Termux desde Google Play para instalar Java fácilmente
-          </p>
-        )}
+        <button
+          onClick={handleInstallJava}
+          disabled={loading}
+          className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded mb-3 transition disabled:opacity-50"
+        >
+          {loading ? 'Abriendo Termux...' : '📱 Instalar Java en Termux'}
+        </button>
 
         <button
           onClick={handleManualInstall}
