@@ -23,7 +23,7 @@ Creas el servidor, lo inicias y se genera autom谩ticamente una **direcci贸n p�
 
 | Panel Principal y Diagn贸stico | Creaci贸n de Servidor | Tienda de Mods (Modrinth) |
 | :---: | :---: | :---: |
-| ![Dashboard](1000054540.jpg) | ![Crear Servidor](1000054542.jpg) | ![Tienda de Mods](1000054544.jpg) |
+| ![Dashboard](Screenshot_20260829_130213_TaichiX.jpg) | ![Crear Servidor](Screenshot_20260829_130239_TaichiX.jpg) | ![Tienda de Mods](Screenshot_20260829_130255_TaichiX.jpg) |
 
 ---
 
@@ -103,3 +103,4 @@ Licencia     = Open Source (MIT / GPL)
 <p align="center">
   <b>TaichiX</b> 鈥� <i>Tu servidor de Minecraft, en el bolsillo, abierto al mundo.</i> 馃實馃幃
 </p>
+
