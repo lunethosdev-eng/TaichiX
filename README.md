@@ -1,16 +1,11 @@
-<div align="center">
+# 馃摫 TaichiX
 
-  <img src="1000054540.jpg" alt="TaichiX Dashboard" width="350" style="border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+> **Servidores de Minecraft en tu Android (Java & Bedrock) 路 Accesibles desde cualquier red**
 
-  # 馃摫 TaichiX
-  ### Servidores de Minecraft en tu Android (Java & Bedrock) 路 Accesibles desde cualquier red
-
-  [![Platform](https://img.shields.io/badge/Plataforma-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/taichix)
-  [![License](https://img.shields.io/badge/Licencia-Open%20Source-blue?style=for-the-badge)](https://github.com/taichix)
-  [![Build](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/taichix)
-  [![Status](https://img.shields.io/badge/Estado-Desarrollo%20Activo-orange?style=for-the-badge)](https://github.com/taichix)
-
-</div>
+[![Plataforma](https://img.shields.io/badge/Plataforma-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/lunethosdev-eng/TaichiX)
+[![Licencia](https://img.shields.io/badge/Licencia-Open%20Source-blue?style=for-the-badge)](https://github.com/lunethosdev-eng/TaichiX)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/lunethosdev-eng/TaichiX)
+[![Estado](https://img.shields.io/badge/Estado-Desarrollo%20Activo-orange?style=for-the-badge)](https://github.com/lunethosdev-eng/TaichiX)
 
 ---
 
@@ -26,24 +21,9 @@ Creas el servidor, lo inicias y se genera autom谩ticamente una **direcci贸n p�
 
 ## 馃摳 Capturas de Pantalla
 
-<div align="center">
-  <table border="0">
-    <tr>
-      <td align="center" width="33%">
-        <b>Panel Principal y Diagn贸stico</b><br><br>
-        <img src="1000054540.jpg" alt="Dashboard" width="250" style="border-radius: 8px;">
-      </td>
-      <td align="center" width="33%">
-        <b>Creaci贸n de Servidor</b><br><br>
-        <img src="1000054542.jpg" alt="Crear Servidor" width="250" style="border-radius: 8px;">
-      </td>
-      <td align="center" width="33%">
-        <b>Tienda de Mods (Modrinth)</b><br><br>
-        <img src="1000054544.jpg" alt="Tienda de Mods" width="250" style="border-radius: 8px;">
-      </td>
-    </tr>
-  </table>
-</div>
+| Panel Principal y Diagn贸stico | Creaci贸n de Servidor | Tienda de Mods (Modrinth) |
+| :---: | :---: | :---: |
+| ![Dashboard](1000054540.jpg) | ![Crear Servidor](1000054542.jpg) | ![Tienda de Mods](1000054544.jpg) |
 
 ---
 
@@ -77,7 +57,7 @@ Creas el servidor, lo inicias y se genera autom谩ticamente una **direcci贸n p�
 
 | Requisito | Recomendaci贸n |
 | :--- | :--- |
-| **Sistemas Operativo** | Android 8.0 o superior |
+| **Sistema Operativo** | Android 8.0 o superior |
 | **RAM M铆nima (Bedrock)** | 1 GB disponible |
 | **RAM M铆nima (Java)** | 2 GB+ disponibles |
 
@@ -120,8 +100,6 @@ Licencia     = Open Source (MIT / GPL)
 
 ---
 
-<div align="center">
-
-**TaichiX** 鈥� *Tu servidor de Minecraft, en el bolsillo, abierto al mundo.* 馃實馃幃
-
-</div>
+<p align="center">
+  <b>TaichiX</b> 鈥� <i>Tu servidor de Minecraft, en el bolsillo, abierto al mundo.</i> 馃實馃幃
+</p>
