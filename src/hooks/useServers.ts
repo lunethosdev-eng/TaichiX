@@ -192,22 +192,40 @@ export function useServers() {
           `Playit: ${avail?.playit ? 'sí' : 'no aún'}`,
         ]);
 
+        const serverPath = await getServerDir(id);
+
+        // Si es Java y no hay runtime → descargarlo AUTOMÁTICAMENTE (sin Termux)
         if (server.type === 'java' && !avail?.javaRuntime) {
-          // Mostrar prompt para instalar Java via Termux
-          setJavaPromptServerId(id);
-          setShowJavaPrompt(true);
-          
           await appendLogs(id, [
-            '❌ No hay Java Runtime detectado.',
-            '',
-            'Se abrió una ventana para instalar Java.',
-            'Haz click en "Instalar Java en Termux" si tienes Termux instalado.',
+            'No hay Java Runtime detectado.',
+            'Descargando OpenJDK JRE arm64 (esto puede tomar 2-5 minutos)...',
+            'Se descargará en: /data/data/com.taichix.app/files/runtime/java',
           ]);
-          await setStatus(id, 'error');
-          return;
+          try {
+            const jre = await ServerNative.downloadServer({
+              type: 'java',
+              version: 'openjdk-jre',
+              targetPath: '/data/data/com.taichix.app/files/runtime',
+            });
+            await appendLogs(id, [jre.message || (jre.success ? 'Java instalado' : 'Fallo al instalar Java')]);
+            if (!jre.success) {
+              await appendLogs(id, [
+                'ERROR: No se pudo descargar Java.',
+                'Comprueba que tienes internet y vuelve a intentar.',
+              ]);
+              await setStatus(id, 'error');
+              return;
+            }
+          } catch (e: any) {
+            await appendLogs(id, [
+              'ERROR: No se pudo descargar Java.',
+              `Error: ${e?.message || e}`,
+            ]);
+            await setStatus(id, 'error');
+            return;
+          }
         }
 
-        const serverPath = await getServerDir(id);
         await appendLogs(id, [`Carpeta: ${serverPath}`, 'Descargando servidor (Paper/PocketMine)...']);
 
         const dl = await ServerNative.downloadServer({
@@ -329,4 +347,5 @@ export function useServers() {
 
   return { servers, loading, createServer, startServer, stopServer, deleteServer };
 }
+
 
