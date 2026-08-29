@@ -4,6 +4,8 @@ import android.content.Context;
 import android.app.ActivityManager;
 import android.os.Build;
 import android.util.Log;
+import android.system.Os;
+import android.system.ErrnoException;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -163,23 +165,22 @@ public class ServerNativePlugin extends Plugin {
                         }
                     }
 
-                    // Hacer ejecutable bin/java y el resto de bin/*
+                    // Permisos de ejecución (Android suele bloquear binarios sin chmod real)
                     File binDir = new File(javaDir, "bin");
-                    if (binDir.exists() && binDir.isDirectory()) {
-                        File[] bins = binDir.listFiles();
-                        if (bins != null) {
-                            for (File b : bins) {
-                                b.setExecutable(true, false);
-                            }
-                        }
-                    }
+                    forceExecutableTree(binDir);
+                    File libDir = new File(javaDir, "lib");
+                    forceExecutableTree(libDir);
 
                     File javaBin = new File(javaDir, "bin/java");
                     if (!javaBin.exists()) {
                         call.reject("Tras extraer no se encontró bin/java en " + javaDir.getAbsolutePath());
                         return;
                     }
-                    javaBin.setExecutable(true, false);
+                    forceExecutable(javaBin);
+                    if (!javaBin.canExecute()) {
+                        call.reject("bin/java no es ejecutable (Permission). Ruta: " + javaBin.getAbsolutePath());
+                        return;
+                    }
 
                     // Borrar el tar para ahorrar espacio
                     //noinspection ResultOfMethodCallIgnored
@@ -256,6 +257,7 @@ public class ServerNativePlugin extends Plugin {
                         );
                         return;
                     }
+                    forceExecutable(new File(javaBin));
                     File jar = new File(dir, "server.jar");
                     if (!jar.exists() || jar.length() < 10000) {
                         call.reject("server.jar no encontrado. Descarga el servidor primero.");
@@ -518,6 +520,32 @@ public class ServerNativePlugin extends Plugin {
         }
         String url = "https://github.com/playit-cloud/playit-agent/releases/latest/download/" + asset;
         return downloadFile(url, out);
+    }
+
+
+    private void forceExecutable(File f) {
+        if (f == null || !f.exists()) return;
+        try {
+            f.setExecutable(true, false);
+            f.setReadable(true, false);
+        } catch (Exception ignored) {}
+        try {
+            Os.chmod(f.getAbsolutePath(), 0755);
+        } catch (Exception ignored) {}
+        try {
+            new ProcessBuilder("chmod", "755", f.getAbsolutePath()).start().waitFor();
+        } catch (Exception ignored) {}
+    }
+
+    private void forceExecutableTree(File dir) {
+        if (dir == null || !dir.exists()) return;
+        forceExecutable(dir);
+        File[] kids = dir.listFiles();
+        if (kids == null) return;
+        for (File k : kids) {
+            if (k.isDirectory()) forceExecutableTree(k);
+            else forceExecutable(k);
+        }
     }
 
     private String findJava() {
