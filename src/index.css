@@ -42,3 +42,17 @@ body {
   letter-spacing: 0.05em;
   text-shadow: 2px 2px 0 #000;
 }
+
+
+body {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(16, 185, 129, 0.12), transparent 50%),
+    radial-gradient(900px 500px at 110% 10%, rgba(59, 130, 246, 0.10), transparent 45%),
+    linear-gradient(180deg, #070b14 0%, #0f172a 45%, #0b1220 100%);
+}
+
+.mc-title {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  text-shadow: none;
+}
