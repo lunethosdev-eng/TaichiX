@@ -2,44 +2,33 @@ name: Build Android APK
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install dependencies
-        run: npm install
+      - run: npm install
+      - run: npm run build
 
-      - name: Build web assets
-        run: npm run build
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '21'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
 
-      - name: Accept Android SDK Licenses
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+      - name: Licencias
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Add Capacitor Android + registrar plugin
+      - name: Android + MainActivity limpio
         shell: bash
         run: |
           set -e
@@ -47,61 +36,30 @@ jobs:
           npx cap sync android
 
           mkdir -p android/app/src/main/java/com/taichix/app/plugins
-          cp android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java \
-             android/app/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java
-
-          python3 - << 'PY'
-          from pathlib import Path
-          main = Path("android/app/src/main/java/com/taichix/app/MainActivity.java")
-          main.parent.mkdir(parents=True, exist_ok=True)
-          main.write_text("""package com.taichix.app;
-
-          import android.os.Bundle;
-          import android.util.Log;
-          import com.getcapacitor.BridgeActivity;
-          import com.taichix.app.plugins.ServerNativePlugin;
-
-          public class MainActivity extends BridgeActivity {
-              @Override
-              public void onCreate(Bundle savedInstanceState) {
-                  try {
-                      registerPlugin(ServerNativePlugin.class);
-                  } catch (Throwable t) {
-                      Log.e("TaichiX", "No se pudo registrar ServerNative", t);
-                  }
-                  super.onCreate(savedInstanceState);
-              }
-          }
-          """)
-          assets = Path("android/app/src/main/assets")
-          assets.mkdir(parents=True, exist_ok=True)
-          (assets / "capacitor.plugins.json").write_text("""[
-            {"pkg":"@capacitor/core","classpath":"com.getcapacitor.Bridge"},
-            {"pkg":"com.taichix.app","classpath":"com.taichix.app.plugins.ServerNativePlugin"}
-          ]
-          """)
-          print(main.read_text())
-          PY
-
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            grep -q 'android.permission.INTERNET' "$MANIFEST" || \
-              sed -i '/<manifest/a\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
-            grep -q 'usesCleartextTraffic' "$MANIFEST" || \
-              sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST" || true
+          if [ -f android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java ]; then
+            cp android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java \
+               android/app/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java
           fi
 
-      - name: Build debug APK
+          python3 -c '
+          from pathlib import Path
+          p = Path("android/app/src/main/java/com/taichix/app/MainActivity.java")
+          p.parent.mkdir(parents=True, exist_ok=True)
+          p.write_text("package com.taichix.app;\n\nimport android.os.Bundle;\nimport android.util.Log;\nimport com.getcapacitor.BridgeActivity;\nimport com.taichix.app.plugins.ServerNativePlugin;\n\npublic class MainActivity extends BridgeActivity {\n    @Override\n    public void onCreate(Bundle savedInstanceState) {\n        try {\n            registerPlugin(ServerNativePlugin.class);\n        } catch (Throwable t) {\n            Log.e(\"TaichiX\", \"plugin\", t);\n        }\n        super.onCreate(savedInstanceState);\n    }\n}\n")
+          print(p.read_text())
+          '
+
+          # NO tocar capacitor.plugins.json (el sync ya lo genera bien)
+          echo "MainActivity listo"
+
+      - name: APK
         working-directory: android
-        shell: bash
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: taichix-apk
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          retention-days: 30
