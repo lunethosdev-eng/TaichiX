@@ -2,33 +2,42 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
-      - run: npm install
-      - run: npm run build
+      - name: Install dependencies
+        run: npm install
 
-      - uses: actions/setup-java@v4
+      - name: Build web assets
+        run: npm run build
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: "21"
 
-      - uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Licencias
+      - name: Accept licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Android + MainActivity limpio
+      - name: Capacitor Android and plugin
         shell: bash
         run: |
           set -e
@@ -39,34 +48,38 @@ jobs:
           if [ -f android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java ]; then
             cp android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java \
                android/app/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java
+            echo "Plugin copiado"
+          else
+            echo "AVISO: ServerNativePlugin.java no encontrado"
           fi
 
-          python3 -c '
-from pathlib import Path
-p = Path("android/app/src/main/java/com/taichix/app/MainActivity.java")
-p.parent.mkdir(parents=True, exist_ok=True)
-p.write_text("""package com.taichix.app;
+          mkdir -p android/app/src/main/java/com/taichix/app
+          cat > android/app/src/main/java/com/taichix/app/MainActivity.java << 'JAVA'
+          package com.taichix.app;
 
-import android.os.Bundle;
-import android.util.Log;
-import com.getcapacitor.BridgeActivity;
-import com.taichix.app.plugins.ServerNativePlugin;
+          import android.os.Bundle;
+          import android.util.Log;
+          import com.getcapacitor.BridgeActivity;
+          import com.taichix.app.plugins.ServerNativePlugin;
 
-public class MainActivity extends BridgeActivity {
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        try {
-            registerPlugin(ServerNativePlugin.class);
-        } catch (Throwable t) {
-            Log.e(\"TaichiX\", \"plugin\", t);
-        }
-        super.onCreate(savedInstanceState);
-    }
-}
-""")
-print(p.read_text())
-'
-          # NO reescribir capacitor.plugins.json (cap sync lo genera bien)
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  try {
+                      registerPlugin(ServerNativePlugin.class);
+                  } catch (Throwable t) {
+                      Log.e("TaichiX", "plugin", t);
+                  }
+                  super.onCreate(savedInstanceState);
+              }
+          }
+          JAVA
+
+          # Quitar indentacion accidental del heredoc
+          sed -i 's/^          //' android/app/src/main/java/com/taichix/app/MainActivity.java
+          echo "=== MainActivity ==="
+          cat android/app/src/main/java/com/taichix/app/MainActivity.java
+
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
             grep -q 'android.permission.INTERNET' "$MANIFEST" || \
@@ -74,15 +87,15 @@ print(p.read_text())
             grep -q 'usesCleartextTraffic' "$MANIFEST" || \
               sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST" || true
           fi
-          echo "OK"
 
-      - name: APK
+      - name: Build APK
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: taichix-apk
           path: android/app/build/outputs/apk/debug/*.apk
