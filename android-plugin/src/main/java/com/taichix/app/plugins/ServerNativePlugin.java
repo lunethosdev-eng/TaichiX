@@ -248,34 +248,52 @@ public class ServerNativePlugin extends Plugin {
 
                 ProcessBuilder pb;
                 if ("java".equals(type)) {
-                    String javaBin = findJava();
-                    if (javaBin == null) {
-                        call.reject(
-                            "No hay runtime Java en el dispositivo. " +
-                            "TaichiX necesita un JRE arm64 en files/runtime/java. " +
-                            "Sin Java no se puede iniciar un servidor Paper real."
-                        );
-                        return;
-                    }
-                    forceExecutable(new File(javaBin));
                     File jar = new File(dir, "server.jar");
                     if (!jar.exists() || jar.length() < 10000) {
                         call.reject("server.jar no encontrado. Descarga el servidor primero.");
                         return;
                     }
-                    // EULA + properties reales
                     writeText(new File(dir, "eula.txt"), "eula=true\n");
                     writeServerProperties(new File(dir, "server.properties"), port, motd, maxPlayers, worldName);
 
+                    // Proot + rootfs Linux (glibc) para poder ejecutar OpenJDK en Android
+                    String err = ensureLinuxRuntime();
+                    if (err != null) {
+                        call.reject(err);
+                        return;
+                    }
+
+                    File proot = new File(getContext().getFilesDir(), "linux/proot");
+                    File rootfs = new File(getContext().getFilesDir(), "linux/rootfs");
+                    File javaBinGuest = new File(rootfs, "opt/java/bin/java");
+                    if (!javaBinGuest.exists()) {
+                        call.reject("Java no encontrado dentro del rootfs: " + javaBinGuest.getAbsolutePath());
+                        return;
+                    }
+
                     int xms = Math.min(512, ramMb);
+                    // Montar la carpeta del servidor en /server dentro del rootfs
+                    File tmpDir = new File(getContext().getFilesDir(), "linux/tmp");
+                    if (!tmpDir.exists()) tmpDir.mkdirs();
+
                     pb = new ProcessBuilder(
-                        javaBin,
+                        proot.getAbsolutePath(),
+                        "-r", rootfs.getAbsolutePath(),
+                        "-0",
+                        "-b", "/dev",
+                        "-b", "/proc",
+                        "-b", dir.getAbsolutePath() + ":/server",
+                        "-w", "/server",
+                        "/opt/java/bin/java",
                         "-Xms" + xms + "M",
                         "-Xmx" + ramMb + "M",
                         "-XX:+UseG1GC",
-                        "-jar", jar.getAbsolutePath(),
+                        "-jar", "/server/server.jar",
                         "--nogui"
                     );
+                    Map<String, String> envP = pb.environment();
+                    envP.put("PROOT_TMP_DIR", tmpDir.getAbsolutePath());
+                    envP.put("PROOT_NO_SECCOMP", "1");
                 } else {
                     String phpBin = findPhp();
                     if (phpBin == null) {
@@ -522,6 +540,135 @@ public class ServerNativePlugin extends Plugin {
         return downloadFile(url, out);
     }
 
+
+
+    /**
+     * Prepara proot + Ubuntu base arm64 + OpenJDK dentro del rootfs.
+     * Primera vez: descarga ~80-120 MB. Luego reutiliza.
+     * @return null si OK, mensaje de error si falla
+     */
+    private String ensureLinuxRuntime() {
+        try {
+            File linuxDir = new File(getContext().getFilesDir(), "linux");
+            if (!linuxDir.exists() && !linuxDir.mkdirs()) {
+                return "No se pudo crear linux/";
+            }
+            File proot = new File(linuxDir, "proot");
+            File rootfs = new File(linuxDir, "rootfs");
+            File javaBin = new File(rootfs, "opt/java/bin/java");
+            File marker = new File(linuxDir, "ready.ok");
+
+            if (marker.exists() && proot.exists() && javaBin.exists()) {
+                forceExecutable(proot);
+                forceExecutable(javaBin);
+                return null;
+            }
+
+            if (!proot.exists() || proot.length() < 1000) {
+                String abi = Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "arm64-v8a";
+                String prootUrl;
+                if (abi.contains("x86_64")) {
+                    prootUrl = "https://skirsten.github.io/proot-portable-android-binaries/x86_64/proot";
+                } else if (abi.contains("armeabi") || abi.contains("armv7")) {
+                    prootUrl = "https://skirsten.github.io/proot-portable-android-binaries/armv7/proot";
+                } else {
+                    prootUrl = "https://skirsten.github.io/proot-portable-android-binaries/aarch64/proot";
+                }
+                if (!downloadFile(prootUrl, proot) || proot.length() < 1000) {
+                    return "No se pudo descargar proot";
+                }
+            }
+            forceExecutable(proot);
+
+            if (!new File(rootfs, "bin").exists() && !new File(rootfs, "usr").exists()) {
+                if (!rootfs.exists()) rootfs.mkdirs();
+                File rootfsTar = new File(linuxDir, "rootfs.tar.gz");
+                String rootfsUrl = "http://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04.5-base-arm64.tar.gz";
+                if (!rootfsTar.exists() || rootfsTar.length() < 1000000) {
+                    if (!downloadFile(rootfsUrl, rootfsTar) || rootfsTar.length() < 1000000) {
+                        return "No se pudo descargar Ubuntu rootfs (~27 MB). Revisa la red.";
+                    }
+                }
+                try {
+                    Process extract = new ProcessBuilder(
+                        "tar", "-xzf", rootfsTar.getAbsolutePath(), "-C", rootfs.getAbsolutePath()
+                    ).redirectErrorStream(true).start();
+                    int code = extract.waitFor();
+                    if (code != 0) {
+                        return "Error extrayendo rootfs (tar exit=" + code + ")";
+                    }
+                } catch (Exception e) {
+                    return "No se pudo extraer rootfs: " + e.getMessage();
+                }
+                try {
+                    File resolv = new File(rootfs, "etc/resolv.conf");
+                    writeText(resolv, "nameserver 8.8.8.8\nnameserver 1.1.1.1\n");
+                } catch (Exception ignored) {}
+                //noinspection ResultOfMethodCallIgnored
+                rootfsTar.delete();
+            }
+
+            if (!javaBin.exists()) {
+                File optJava = new File(rootfs, "opt/java");
+                if (!optJava.exists()) optJava.mkdirs();
+                File jreTar = new File(linuxDir, "jre.tar.gz");
+                String jreUrl = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.1%2B12/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.1_12.tar.gz";
+                String abi = Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "arm64-v8a";
+                if (abi.contains("x86_64")) {
+                    jreUrl = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.1%2B12/OpenJDK21U-jre_x64_linux_hotspot_21.0.1_12.tar.gz";
+                }
+                if (!jreTar.exists() || jreTar.length() < 1000000) {
+                    if (!downloadFile(jreUrl, jreTar) || jreTar.length() < 1000000) {
+                        return "No se pudo descargar OpenJDK para el rootfs";
+                    }
+                }
+                try {
+                    Process extract = new ProcessBuilder(
+                        "tar", "-xzf", jreTar.getAbsolutePath(), "-C", optJava.getAbsolutePath()
+                    ).redirectErrorStream(true).start();
+                    int code = extract.waitFor();
+                    if (code != 0) {
+                        return "Error extrayendo OpenJDK en rootfs (tar exit=" + code + ")";
+                    }
+                } catch (Exception e) {
+                    return "No se pudo extraer OpenJDK: " + e.getMessage();
+                }
+                File[] kids = optJava.listFiles();
+                if (kids != null) {
+                    for (File child : kids) {
+                        if (child.isDirectory() && (child.getName().startsWith("jdk") || child.getName().contains("jre"))) {
+                            File[] inner = child.listFiles();
+                            if (inner != null) {
+                                for (File f : inner) {
+                                    File dest = new File(optJava, f.getName());
+                                    //noinspection ResultOfMethodCallIgnored
+                                    f.renameTo(dest);
+                                }
+                            }
+                            //noinspection ResultOfMethodCallIgnored
+                            child.delete();
+                        }
+                    }
+                }
+                forceExecutableTree(new File(optJava, "bin"));
+                //noinspection ResultOfMethodCallIgnored
+                jreTar.delete();
+            }
+
+            if (!javaBin.exists()) {
+                return "Tras la instalacion no existe /opt/java/bin/java en el rootfs";
+            }
+            forceExecutable(proot);
+            forceExecutable(javaBin);
+            try {
+                writeText(marker, "ok\n");
+            } catch (Exception ignored) {}
+            return null;
+        } catch (Exception e) {
+            Log.e(TAG, "ensureLinuxRuntime", e);
+            return "Error preparando runtime Linux: " + e.getMessage();
+        }
+    }
 
     private void forceExecutable(File f) {
         if (f == null || !f.exists()) return;
