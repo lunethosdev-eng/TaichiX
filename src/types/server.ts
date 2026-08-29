@@ -27,6 +27,8 @@ export interface ModItem {
   badge?: string;
   heavy?: boolean;
   icon?: string;
+  iconUrl?: string;
+  downloads?: number;
 }
 
 export interface InstalledMod {
