@@ -42,15 +42,39 @@ jobs:
           fi
 
           python3 -c '
-          from pathlib import Path
-          p = Path("android/app/src/main/java/com/taichix/app/MainActivity.java")
-          p.parent.mkdir(parents=True, exist_ok=True)
-          p.write_text("package com.taichix.app;\n\nimport android.os.Bundle;\nimport android.util.Log;\nimport com.getcapacitor.BridgeActivity;\nimport com.taichix.app.plugins.ServerNativePlugin;\n\npublic class MainActivity extends BridgeActivity {\n    @Override\n    public void onCreate(Bundle savedInstanceState) {\n        try {\n            registerPlugin(ServerNativePlugin.class);\n        } catch (Throwable t) {\n            Log.e(\"TaichiX\", \"plugin\", t);\n        }\n        super.onCreate(savedInstanceState);\n    }\n}\n")
-          print(p.read_text())
-          '
+from pathlib import Path
+p = Path("android/app/src/main/java/com/taichix/app/MainActivity.java")
+p.parent.mkdir(parents=True, exist_ok=True)
+p.write_text("""package com.taichix.app;
 
-          # NO tocar capacitor.plugins.json (el sync ya lo genera bien)
-          echo "MainActivity listo"
+import android.os.Bundle;
+import android.util.Log;
+import com.getcapacitor.BridgeActivity;
+import com.taichix.app.plugins.ServerNativePlugin;
+
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        try {
+            registerPlugin(ServerNativePlugin.class);
+        } catch (Throwable t) {
+            Log.e(\"TaichiX\", \"plugin\", t);
+        }
+        super.onCreate(savedInstanceState);
+    }
+}
+""")
+print(p.read_text())
+'
+          # NO reescribir capacitor.plugins.json (cap sync lo genera bien)
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            grep -q 'android.permission.INTERNET' "$MANIFEST" || \
+              sed -i '/<manifest/a\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+            grep -q 'usesCleartextTraffic' "$MANIFEST" || \
+              sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST" || true
+          fi
+          echo "OK"
 
       - name: APK
         working-directory: android
@@ -63,3 +87,4 @@ jobs:
           name: taichix-apk
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          retention-days: 30
