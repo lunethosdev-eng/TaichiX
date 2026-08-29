@@ -50,7 +50,7 @@ export function ServerCard({ server, onStart, onStop, onDelete, onOpenConsole }:
   const inviteMessage =
     server.status === 'running' && server.publicAddress
       ? `¡Únete a mi servidor de Minecraft!\n\n` +
-        `🌐 Dirección (cualquier internet):\n${publicFull}\n\n` +
+        `Dirección (cualquier internet):\n${publicFull}\n\n` +
         `Código: ${server.inviteCode}\n` +
         `Tipo: ${server.type === 'java' ? 'Java' : 'Bedrock'} ${server.version}\n` +
         (server.installedMods && server.installedMods.length > 0
@@ -73,7 +73,7 @@ export function ServerCard({ server, onStart, onStop, onDelete, onOpenConsole }:
               </Badge>
               <Badge color={statusColor}>{statusLabel}</Badge>
               {server.status === 'running' && server.publicEnabled && (
-                <Badge color="purple">🌐 Público</Badge>
+                <Badge color="purple">Público</Badge>
               )}
               {server.type === 'java' && server.loader && (
                 <Badge color="slate">{server.loader}</Badge>
@@ -202,3 +202,4 @@ export function ServerCard({ server, onStart, onStop, onDelete, onOpenConsole }:
     </Card>
   );
 }
+
