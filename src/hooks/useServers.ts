@@ -5,15 +5,12 @@ import type { MinecraftServer, CreateServerForm } from '../types/server';
 import { generateId, generateInviteCode } from '../lib/utils';
 import { MOD_CATALOG } from '../data/modCatalog';
 import ServerNative from '../plugins/ServerNative';
-import { JavaInstallPrompt } from '../components/JavaInstallPrompt';
 
 const STORAGE_KEY = 'mc_servers';
 
 export function useServers() {
   const [servers, setServers] = useState<MinecraftServer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showJavaPrompt, setShowJavaPrompt] = useState(false);
-  const [javaPromptServerId, setJavaPromptServerId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -275,7 +272,7 @@ export function useServers() {
         if (tunnel.success && tunnel.publicAddress) {
           await appendLogs(id, [
             '¡Servidor REAL en línea!',
-            `Dirección pública: ${tunnel.publicAddress}${tunnel.publicPort ? ':' + tunnel.publicPort : ''}`,
+            `Dirección pública: \( {tunnel.publicAddress} \){tunnel.publicPort ? ':' + tunnel.publicPort : ''}`,
             'Tus amigos pueden entrar desde cualquier internet.',
           ]);
           await setStatus(id, 'running', {
@@ -346,6 +343,4 @@ export function useServers() {
   );
 
   return { servers, loading, createServer, startServer, stopServer, deleteServer };
-}
-
-
+                }
