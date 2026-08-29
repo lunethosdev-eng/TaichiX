@@ -434,27 +434,36 @@ public class ServerNativePlugin extends Plugin {
 
     private boolean downloadPaper(String version, File out) {
         try {
-            // 1) Listar builds de esa versión
-            String buildsUrl = "https://api.papermc.io/v2/projects/paper/versions/" + version;
+            // API v3 (fill.papermc.io) — v2 fue descontinuada (410)
+            String buildsUrl = "https://fill.papermc.io/v3/projects/paper/versions/" + version + "/builds";
             String buildsJson = httpGet(buildsUrl);
-            if (buildsJson == null) return false;
-            JSONObject obj = new JSONObject(buildsJson);
-            JSONArray builds = obj.getJSONArray("builds");
+            if (buildsJson == null || buildsJson.length() < 10) {
+                Log.e(TAG, "Paper builds null for " + version);
+                return false;
+            }
+            JSONArray builds = new JSONArray(buildsJson);
             if (builds.length() == 0) return false;
-            int build = builds.getInt(builds.length() - 1);
 
-            // 2) Nombre del jar
-            String metaUrl = "https://api.papermc.io/v2/projects/paper/versions/" + version + "/builds/" + build;
-            String metaJson = httpGet(metaUrl);
-            if (metaJson == null) return false;
-            JSONObject meta = new JSONObject(metaJson);
-            String jarName = meta.getJSONObject("downloads").getJSONObject("application").getString("name");
+            // Preferir canal STABLE; si no, el primero (más reciente)
+            JSONObject chosen = null;
+            for (int i = 0; i < builds.length(); i++) {
+                JSONObject b = builds.getJSONObject(i);
+                if ("STABLE".equalsIgnoreCase(b.optString("channel", ""))) {
+                    chosen = b;
+                    break;
+                }
+            }
+            if (chosen == null) chosen = builds.getJSONObject(0);
 
-            String jarUrl = "https://api.papermc.io/v2/projects/paper/versions/" + version
-                + "/builds/" + build + "/downloads/" + jarName;
+            JSONObject downloads = chosen.getJSONObject("downloads");
+            JSONObject app = downloads.has("server:default")
+                ? downloads.getJSONObject("server:default")
+                : downloads.getJSONObject(downloads.keys().next());
+            String jarUrl = app.getString("url");
+            Log.i(TAG, "Paper " + version + " -> " + jarUrl);
             return downloadFile(jarUrl, out);
         } catch (Exception e) {
-            Log.e(TAG, "downloadPaper", e);
+            Log.e(TAG, "downloadPaper " + version, e);
             return false;
         }
     }
@@ -465,7 +474,7 @@ public class ServerNativePlugin extends Plugin {
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setConnectTimeout(15000);
             conn.setReadTimeout(30000);
-            conn.setRequestProperty("User-Agent", "TaichiX/1.0");
+            conn.setRequestProperty("User-Agent", "TaichiX/1.0 (https://github.com/lunethosdev-eng/TaichiX)");
             if (conn.getResponseCode() != 200) return null;
             BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
             StringBuilder sb = new StringBuilder();
@@ -484,7 +493,7 @@ public class ServerNativePlugin extends Plugin {
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setConnectTimeout(20000);
             conn.setReadTimeout(120000);
-            conn.setRequestProperty("User-Agent", "TaichiX/1.0");
+            conn.setRequestProperty("User-Agent", "TaichiX/1.0 (https://github.com/lunethosdev-eng/TaichiX)");
             conn.connect();
             if (conn.getResponseCode() != 200) return false;
             try (InputStream in = conn.getInputStream(); FileOutputStream fos = new FileOutputStream(out)) {
