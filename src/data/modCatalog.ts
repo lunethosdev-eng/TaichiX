@@ -9,6 +9,7 @@ export const MOD_CATALOG: ModItem[] = [
   // ─── JAVA ───────────────────────────────────────────
   {
     id: 'sodium',
+    iconUrl: 'https://cdn.modrinth.com/data/AANobbMI/icon.png',
     name: 'Sodium',
     description: 'Optimización gráfica extrema. Más FPS en clientes; ideal junto a Paper.',
     author: 'CaffeineMC',
@@ -22,6 +23,7 @@ export const MOD_CATALOG: ModItem[] = [
   },
   {
     id: 'lithium',
+    iconUrl: 'https://cdn.modrinth.com/data/gvQqBUqZ/icon.png',
     name: 'Lithium',
     description: 'Optimiza el motor del servidor/juego sin cambiar gameplay.',
     author: 'CaffeineMC',
@@ -35,6 +37,7 @@ export const MOD_CATALOG: ModItem[] = [
   },
   {
     id: 'iris',
+    iconUrl: 'https://cdn.modrinth.com/data/YL57xq9U/icon.png',
     name: 'Iris Shaders',
     description: 'Soporte de shaders en Fabric. Pesado en móviles.',
     author: 'Iris Team',
@@ -48,6 +51,7 @@ export const MOD_CATALOG: ModItem[] = [
   },
   {
     id: 'create',
+    iconUrl: 'https://cdn.modrinth.com/data/LNytGWDc/icon.png',
     name: 'Create',
     description: 'Automatización steampunk: engranajes, trenes, fábricas.',
     author: 'simibubi',
@@ -62,6 +66,7 @@ export const MOD_CATALOG: ModItem[] = [
   },
   {
     id: 'jei',
+    iconUrl: 'https://cdn.modrinth.com/data/u6dRKJwZ/315c1d00f8df78c88983d812beb39951c7e4d628.jpeg',
     name: 'Just Enough Items (JEI)',
     description: 'Ver recetas e items en el inventario. Imprescindible con mods.',
     author: 'mezz',
@@ -75,6 +80,7 @@ export const MOD_CATALOG: ModItem[] = [
   },
   {
     id: 'waystones',
+    iconUrl: 'https://cdn.modrinth.com/data/LOpKDEYx/icon.png',
     name: 'Waystones',
     description: 'Piedras de teletransporte para viajar rápido por el mundo.',
     author: 'BlayTheNinth',
@@ -306,3 +312,4 @@ export function filterMods(
   }
   return list;
 }
+
