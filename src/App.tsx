@@ -28,7 +28,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-bold text-base leading-tight mc-title">TaichiX</h1>
-              <p className="text-[10px] text-slate-400">Java + Bedrock · Público</p>
+              <p className="text-[10px] text-slate-400">Servidores Java y Bedrock</p>
             </div>
           </div>
           <Button size="sm" onClick={() => setShowCreate(true)}>
