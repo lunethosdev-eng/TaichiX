@@ -43,40 +43,45 @@ jobs:
         shell: bash
         run: |
           set -e
-
           npx cap add android || true
           npx cap sync android
 
-          echo "=== Copiar plugin nativo ==="
           mkdir -p android/app/src/main/java/com/taichix/app/plugins
           cp android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java \
              android/app/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java
 
-          echo "=== Sobrescribir MainActivity (Capacitor 7 no tiene onCreate) ==="
-          MAIN_DIR=$(find android/app/src/main/java -type d -name app | head -1)
-          mkdir -p "$MAIN_DIR"
-          cat > "$MAIN_DIR/MainActivity.java" << 'EOF'
-          package com.taichix.app;
+          python3 - << 'PY'
+          from pathlib import Path
+          main = Path("android/app/src/main/java/com/taichix/app/MainActivity.java")
+          main.parent.mkdir(parents=True, exist_ok=True)
+          main.write_text("""package com.taichix.app;
 
           import android.os.Bundle;
+          import android.util.Log;
           import com.getcapacitor.BridgeActivity;
           import com.taichix.app.plugins.ServerNativePlugin;
 
           public class MainActivity extends BridgeActivity {
               @Override
               public void onCreate(Bundle savedInstanceState) {
-                  registerPlugin(ServerNativePlugin.class);
+                  try {
+                      registerPlugin(ServerNativePlugin.class);
+                  } catch (Throwable t) {
+                      Log.e("TaichiX", "No se pudo registrar ServerNative", t);
+                  }
                   super.onCreate(savedInstanceState);
               }
           }
-          EOF
-          echo "--- MainActivity ---"
-          cat "$MAIN_DIR/MainActivity.java"
-
-          echo "=== capacitor.plugins.json DESPUES del sync ==="
-          mkdir -p android/app/src/main/assets
-          printf '%s\n' '[' '  {' '    "pkg": "@capacitor/core",' '    "classpath": "com.getcapacitor.Bridge"' '  },' '  {' '    "pkg": "com.taichix.app",' '    "classpath": "com.taichix.app.plugins.ServerNativePlugin"' '  }' ']' > android/app/src/main/assets/capacitor.plugins.json
-          cat android/app/src/main/assets/capacitor.plugins.json
+          """)
+          assets = Path("android/app/src/main/assets")
+          assets.mkdir(parents=True, exist_ok=True)
+          (assets / "capacitor.plugins.json").write_text("""[
+            {"pkg":"@capacitor/core","classpath":"com.getcapacitor.Bridge"},
+            {"pkg":"com.taichix.app","classpath":"com.taichix.app.plugins.ServerNativePlugin"}
+          ]
+          """)
+          print(main.read_text())
+          PY
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
@@ -85,8 +90,6 @@ jobs:
             grep -q 'usesCleartextTraffic' "$MANIFEST" || \
               sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST" || true
           fi
-
-          echo "✅ Plugin registrado. NO hacer cap sync otra vez."
 
       - name: Build debug APK
         working-directory: android
