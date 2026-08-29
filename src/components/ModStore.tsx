@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { X, Search, Download, Check, Package, AlertTriangle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { X, Search, Download, Check, Package, AlertTriangle, Loader2 } from 'lucide-react';
 import type { ModItem, ModLoader, ServerType } from '../types/server';
 import { filterMods } from '../data/modCatalog';
 import { Button, Card } from './ui';
@@ -29,12 +29,80 @@ interface Props {
   onClose: () => void;
   platform: ServerType;
   mcVersion: string;
-  /** Loader actual (Java). En Bedrock se ignora. */
   loader?: ModLoader;
   onLoaderChange?: (loader: ModLoader) => void;
-  /** IDs de mods ya seleccionados */
   selectedIds: string[];
   onChangeSelected: (ids: string[]) => void;
+}
+
+function mapCategory(cats: string[]): ModItem['category'] {
+  const c = cats.map(x => x.toLowerCase());
+  if (c.some(x => x.includes('optim'))) return 'optimization';
+  if (c.some(x => x.includes('magic') || x.includes('magic'))) return 'magic';
+  if (c.some(x => x.includes('tech') || x.includes('technology'))) return 'tech';
+  if (c.some(x => x.includes('adventure'))) return 'adventure';
+  if (c.some(x => x.includes('decoration') || x.includes('cosmetic'))) return 'cosmetic';
+  if (c.some(x => x.includes('world') || x.includes('map'))) return 'map';
+  if (c.some(x => x.includes('utility') || x.includes('library'))) return 'utility';
+  return 'gameplay';
+}
+
+async function searchModrinth(query: string, loader: ModLoader, version: string): Promise<ModItem[]> {
+  const facets: string[][] = [['project_type:mod']];
+  if (loader && loader !== 'vanilla' && loader !== 'paper') {
+    facets.push([`categories:${loader}`]);
+  }
+  const ver = version.split('.').slice(0, 2).join('.');
+  if (ver) facets.push([`versions:${version}`, `versions:${ver}`]);
+
+  const url =
+    'https://api.modrinth.com/v2/search?' +
+    new URLSearchParams({
+      query: query || 'fabric',
+      limit: '24',
+      index: 'downloads',
+      facets: JSON.stringify(facets),
+    });
+
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error('Modrinth HTTP ' + res.status);
+  const data = await res.json();
+  const hits = Array.isArray(data.hits) ? data.hits : [];
+  return hits.map((h: any) => ({
+    id: String(h.slug || h.project_id),
+    name: String(h.title || h.slug),
+    description: String(h.description || ''),
+    author: String(h.author || 'Modrinth'),
+    platform: 'java' as const,
+    loaders: (h.categories || []).filter((c: string) =>
+      ['fabric', 'forge', 'quilt', 'neoforge'].includes(c)
+    ),
+    versions: Array.isArray(h.versions) ? h.versions.slice(0, 8) : [version],
+    category: mapCategory(h.categories || []),
+    sizeMb: 1,
+    badge: h.downloads > 10_000_000 ? 'Popular' : undefined,
+    iconUrl: h.icon_url || undefined,
+    downloads: h.downloads,
+  }));
+}
+
+function ModCover({ mod }: { mod: ModItem }) {
+  const [failed, setFailed] = useState(false);
+  if (mod.iconUrl && !failed) {
+    return (
+      <img
+        src={mod.iconUrl}
+        alt=""
+        className="w-12 h-12 rounded-xl object-cover bg-slate-800 shrink-0"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center shrink-0">
+      <Package className="w-6 h-6 text-emerald-400" />
+    </div>
+  );
 }
 
 export function ModStore({
@@ -49,11 +117,45 @@ export function ModStore({
 }: Props) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
+  const [remote, setRemote] = useState<ModItem[] | null>(null);
+  const [loadingRemote, setLoadingRemote] = useState(false);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
 
-  const mods = useMemo(
+  useEffect(() => {
+    if (!open || platform !== 'java') return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setLoadingRemote(true);
+      setRemoteError(null);
+      try {
+        const list = await searchModrinth(query, loader, mcVersion);
+        if (!cancelled) setRemote(list);
+      } catch (e: any) {
+        if (!cancelled) {
+          setRemote(null);
+          setRemoteError('Sin conexión a Modrinth. Mostrando catálogo local.');
+        }
+      } finally {
+        if (!cancelled) setLoadingRemote(false);
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [open, platform, query, loader, mcVersion]);
+
+  const localMods = useMemo(
     () => filterMods(platform, mcVersion, platform === 'java' ? loader : undefined, query, category),
     [platform, mcVersion, loader, query, category]
   );
+
+  const mods = useMemo(() => {
+    if (platform !== 'java') return localMods;
+    const list = remote && remote.length > 0 ? remote : localMods;
+    if (category === 'all') return list;
+    return list.filter(m => m.category === category);
+  }, [platform, remote, localMods, category]);
 
   if (!open) return null;
 
@@ -65,13 +167,11 @@ export function ModStore({
     }
   };
 
-  const title =
-    platform === 'java' ? 'Tienda de mods (Java)' : 'Tienda de addons (Bedrock)';
+  const title = platform === 'java' ? 'Tienda de mods' : 'Tienda de addons';
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
       <Card className="w-full max-w-lg max-h-[92vh] flex flex-col rounded-b-none sm:rounded-xl overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700 shrink-0">
           <div>
             <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -79,7 +179,7 @@ export function ModStore({
               {title}
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              {platform === 'java' ? 'Java' : 'Bedrock'} · {mcVersion}
+              {platform === 'java' ? 'Java · Modrinth' : 'Bedrock'} · {mcVersion}
               {platform === 'java' ? ` · ${loader}` : ''}
             </p>
           </div>
@@ -88,7 +188,6 @@ export function ModStore({
           </button>
         </div>
 
-        {/* Loader (solo Java) */}
         {platform === 'java' && onLoaderChange && (
           <div className="px-4 pt-3 flex gap-1.5 overflow-x-auto shrink-0">
             {LOADERS.filter(l => !l.only || l.only === 'java').map(l => (
@@ -108,14 +207,13 @@ export function ModStore({
           </div>
         )}
 
-        {/* Buscador */}
         <div className="px-4 py-3 shrink-0">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Buscar mods..."
+              placeholder="Buscar en Modrinth..."
               className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-900 border border-slate-600 focus:border-emerald-500 focus:outline-none text-sm"
             />
           </div>
@@ -135,11 +233,16 @@ export function ModStore({
               </button>
             ))}
           </div>
+          {remoteError && <p className="text-[11px] text-amber-400 mt-2">{remoteError}</p>}
         </div>
 
-        {/* Lista */}
         <div className="flex-1 overflow-y-auto px-4 pb-3 space-y-2">
-          {mods.length === 0 ? (
+          {loadingRemote && (
+            <div className="flex items-center justify-center gap-2 py-6 text-slate-400 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" /> Buscando mods reales...
+            </div>
+          )}
+          {!loadingRemote && mods.length === 0 ? (
             <div className="text-center py-10 text-slate-500 text-sm">
               No hay mods compatibles con esta versión
               {platform === 'java' ? ` / ${loader}` : ''}.
@@ -157,9 +260,7 @@ export function ModStore({
                   }`}
                 >
                   <div className="flex gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-xl shrink-0">
-                      {mod.icon || '📦'}
-                    </div>
+                    <ModCover mod={mod} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-medium text-sm">{mod.name}</span>
@@ -177,8 +278,17 @@ export function ModStore({
                       <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{mod.description}</p>
                       <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500">
                         <span>{mod.author}</span>
-                        <span>·</span>
-                        <span>\~{mod.sizeMb} MB</span>
+                        {mod.downloads ? (
+                          <>
+                            <span>·</span>
+                            <span>{mod.downloads > 1000000 ? `${(mod.downloads / 1000000).toFixed(1)}M` : `${Math.round(mod.downloads / 1000)}k`} descargas</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>·</span>
+                            <span>~{mod.sizeMb} MB</span>
+                          </>
+                        )}
                       </div>
                     </div>
                     <button
@@ -203,12 +313,11 @@ export function ModStore({
           )}
         </div>
 
-        {/* Footer */}
         <div className="p-4 border-t border-slate-700 flex items-center justify-between gap-3 shrink-0">
           <div className="text-sm text-slate-400">
             {selectedIds.length === 0
               ? 'Ningún mod seleccionado'
-              : `\( {selectedIds.length} mod \){selectedIds.length > 1 ? 's' : ''} seleccionado${selectedIds.length > 1 ? 's' : ''}`}
+              : `${selectedIds.length} seleccionado${selectedIds.length > 1 ? 's' : ''}`}
           </div>
           <Button onClick={onClose}>Listo</Button>
         </div>
@@ -216,3 +325,4 @@ export function ModStore({
     </div>
   );
 }
+
