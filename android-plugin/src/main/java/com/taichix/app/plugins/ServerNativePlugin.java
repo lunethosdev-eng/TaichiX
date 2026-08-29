@@ -86,28 +86,109 @@ public class ServerNativePlugin extends Plugin {
                     return;
                 }
 
-                // Si version contiene "jre" o "openjdk", es descarga de Java Runtime
+                // Si version contiene "jre" o "openjdk", es descarga + extracción de Java Runtime
                 if ("java".equals(type) && (version.contains("jre") || version.contains("openjdk"))) {
-                    File javaDir = new File(dir, "java");
+                    // Directorio fijo de runtime (no depende de targetPath del servidor)
+                    File runtimeRoot = new File(getContext().getFilesDir(), "runtime");
+                    File javaDir = new File(runtimeRoot, "java");
                     if (!javaDir.exists() && !javaDir.mkdirs()) {
                         call.reject("No se pudo crear directorio java: " + javaDir.getAbsolutePath());
                         return;
                     }
-                    
-                    // URL de descarga de OpenJDK JRE arm64
-                    String jreUrl = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.1%2B12/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.1_12.tar.gz";
-                    File tarOut = new File(javaDir, "jre.tar.gz");
-                    
-                    boolean ok = downloadFile(jreUrl, tarOut);
-                    if (!ok || tarOut.length() < 10000) {
-                        call.reject("No se pudo descargar OpenJDK JRE");
+
+                    // Si ya existe bin/java, no re-descargar
+                    File existingJava = new File(javaDir, "bin/java");
+                    if (existingJava.exists() && existingJava.canExecute()) {
+                        JSObject ret = new JSObject();
+                        ret.put("success", true);
+                        ret.put("path", javaDir.getAbsolutePath());
+                        ret.put("message", "OpenJDK JRE ya instalado");
+                        call.resolve(ret);
                         return;
                     }
-                    
+
+                    // Elegir ABI
+                    String abi = Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "arm64-v8a";
+                    String jreUrl;
+                    if (abi.contains("x86_64") || abi.contains("x86")) {
+                        jreUrl = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.1%2B12/OpenJDK21U-jre_x64_linux_hotspot_21.0.1_12.tar.gz";
+                    } else {
+                        // arm64 por defecto (mayoría de móviles)
+                        jreUrl = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.1%2B12/OpenJDK21U-jre_aarch64_linux_hotspot_21.0.1_12.tar.gz";
+                    }
+
+                    File tarOut = new File(javaDir, "jre.tar.gz");
+                    boolean ok = downloadFile(jreUrl, tarOut);
+                    if (!ok || tarOut.length() < 10000) {
+                        call.reject("No se pudo descargar OpenJDK JRE (ABI=" + abi + ")");
+                        return;
+                    }
+
+                    // Extraer tar.gz con el tar del sistema
+                    try {
+                        Process extract = new ProcessBuilder(
+                            "tar", "-xzf", tarOut.getAbsolutePath(), "-C", javaDir.getAbsolutePath()
+                        ).redirectErrorStream(true).start();
+                        int code = extract.waitFor();
+                        if (code != 0) {
+                            call.reject("Error al extraer JRE (tar exit=" + code + ")");
+                            return;
+                        }
+                    } catch (Exception e) {
+                        call.reject("No se pudo extraer JRE: " + e.getMessage());
+                        return;
+                    }
+
+                    // Temurin crea una subcarpeta tipo jdk-21.0.1+12-jre → mover contenido a javaDir
+                    File[] children = javaDir.listFiles();
+                    if (children != null) {
+                        for (File child : children) {
+                            if (child.isDirectory() && (child.getName().startsWith("jdk") || child.getName().contains("jre"))) {
+                                File bin = new File(child, "bin");
+                                if (bin.exists()) {
+                                    // Mover contenido de la subcarpeta a javaDir
+                                    File[] inner = child.listFiles();
+                                    if (inner != null) {
+                                        for (File f : inner) {
+                                            File dest = new File(javaDir, f.getName());
+                                            if (!f.renameTo(dest)) {
+                                                // fallback copy
+                                                // (en la mayoría de casos renameTo funciona en el mismo filesystem)
+                                            }
+                                        }
+                                    }
+                                    child.delete();
+                                }
+                            }
+                        }
+                    }
+
+                    // Hacer ejecutable bin/java y el resto de bin/*
+                    File binDir = new File(javaDir, "bin");
+                    if (binDir.exists() && binDir.isDirectory()) {
+                        File[] bins = binDir.listFiles();
+                        if (bins != null) {
+                            for (File b : bins) {
+                                b.setExecutable(true, false);
+                            }
+                        }
+                    }
+
+                    File javaBin = new File(javaDir, "bin/java");
+                    if (!javaBin.exists()) {
+                        call.reject("Tras extraer no se encontró bin/java en " + javaDir.getAbsolutePath());
+                        return;
+                    }
+                    javaBin.setExecutable(true, false);
+
+                    // Borrar el tar para ahorrar espacio
+                    //noinspection ResultOfMethodCallIgnored
+                    tarOut.delete();
+
                     JSObject ret = new JSObject();
                     ret.put("success", true);
                     ret.put("path", javaDir.getAbsolutePath());
-                    ret.put("message", "OpenJDK JRE descargado (" + (tarOut.length() / 1024 / 1024) + " MB)");
+                    ret.put("message", "OpenJDK JRE instalado y listo (" + (javaBin.length() / 1024) + " KB bin/java)");
                     call.resolve(ret);
                 } else if ("java".equals(type)) {
                     File out = new File(dir, "server.jar");
@@ -433,20 +514,34 @@ public class ServerNativePlugin extends Plugin {
     private String findJava() {
         String[] candidates = {
             getContext().getFilesDir() + "/runtime/java/bin/java",
-            getContext().getFilesDir() + "/runtime/java",
             "/data/data/com.taichix.app/files/runtime/java/bin/java",
+            getContext().getFilesDir() + "/runtime/java",
             "/system/bin/java",
-            "/system/xbin/java",
-            "java"
+            "/system/xbin/java"
         };
         for (String c : candidates) {
             try {
-                if (c.equals("java")) {
-                    Process p = new ProcessBuilder("which", "java").start();
-                    if (p.waitFor() == 0) return "java";
-                } else {
-                    File f = new File(c);
-                    if (f.exists() && f.canExecute()) return f.getAbsolutePath();
+                File f = new File(c);
+                if (f.exists() && f.canExecute() && f.isFile()) {
+                    return f.getAbsolutePath();
+                }
+                // Si es un directorio, buscar bin/java dentro (por si quedó subcarpeta jdk-*)
+                if (f.exists() && f.isDirectory()) {
+                    File nested = new File(f, "bin/java");
+                    if (nested.exists() && nested.canExecute()) {
+                        return nested.getAbsolutePath();
+                    }
+                    File[] kids = f.listFiles();
+                    if (kids != null) {
+                        for (File k : kids) {
+                            if (k.isDirectory()) {
+                                File n2 = new File(k, "bin/java");
+                                if (n2.exists() && n2.canExecute()) {
+                                    return n2.getAbsolutePath();
+                                }
+                            }
+                        }
+                    }
                 }
             } catch (Exception ignored) {}
         }
@@ -541,4 +636,5 @@ public class ServerNativePlugin extends Plugin {
         return null;
     }
 }
+
 
