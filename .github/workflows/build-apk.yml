@@ -75,17 +75,34 @@ jobs:
           }
           JAVA
 
-          # Quitar indentacion accidental del heredoc
           sed -i 's/^          //' android/app/src/main/java/com/taichix/app/MainActivity.java
           echo "=== MainActivity ==="
           cat android/app/src/main/java/com/taichix/app/MainActivity.java
+
+          # Android 10+ bloquea exec() si targetSdk >= 29. Bajar a 28 para poder ejecutar Java descargado.
+          GRADLE_APP="android/app/build.gradle"
+          if [ -f "$GRADLE_APP" ]; then
+            sed -i 's/targetSdkVersion[[:space:]]*[0-9][0-9]*/targetSdkVersion 28/' "$GRADLE_APP" || true
+            sed -i 's/targetSdk[[:space:]]*[0-9][0-9]*/targetSdk 28/' "$GRADLE_APP" || true
+            if ! grep -q 'targetSdkVersion 28' "$GRADLE_APP"; then
+              sed -i '/defaultConfig {/a\        targetSdkVersion 28' "$GRADLE_APP" || true
+            fi
+            echo "=== app build.gradle (sdk) ==="
+            grep -n "targetSdk\|minSdk\|compileSdk" "$GRADLE_APP" || true
+          fi
+
+          if [ -f android/variables.gradle ]; then
+            sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 28/' android/variables.gradle || true
+            echo "=== variables.gradle ==="
+            cat android/variables.gradle
+          fi
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
             grep -q 'android.permission.INTERNET' "$MANIFEST" || \
               sed -i '/<manifest/a\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
             grep -q 'usesCleartextTraffic' "$MANIFEST" || \
-              sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST" || true
+              sed -i 's/<application /<application android:usesCleartextTraffic="true" android:extractNativeLibs="true" /' "$MANIFEST" || true
           fi
 
       - name: Build APK
