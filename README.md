@@ -1,98 +1,127 @@
-# TaichiX 📱⛏️
+<div align="center">
 
-> **Servidores de Minecraft en tu Android (Java y Bedrock). Accesibles desde cualquier internet.**
+  <img src="1000054540.jpg" alt="TaichiX Dashboard" width="350" style="border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
 
-TaichiX convierte tu teléfono Android en un host de Minecraft sin depender de Termux, PCs ni servicios de pago. Creas el servidor, lo inicias y compartes una dirección pública. Tus amigos entran desde su red, no solo desde la tuya.
+  # 馃摫 TaichiX
+  ### Servidores de Minecraft en tu Android (Java & Bedrock) 路 Accesibles desde cualquier red
 
----
+  [![Platform](https://img.shields.io/badge/Plataforma-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/taichix)
+  [![License](https://img.shields.io/badge/Licencia-Open%20Source-blue?style=for-the-badge)](https://github.com/taichix)
+  [![Build](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/taichix)
+  [![Status](https://img.shields.io/badge/Estado-Desarrollo%20Activo-orange?style=for-the-badge)](https://github.com/taichix)
 
-## 💡 La idea
-
-Minecraft en el móvil suele limitarse a jugar. **TaichiX** está pensado para hospedar:
-
-- 🟢 **Mundo Java o Bedrock** corriendo directamente en el propio dispositivo.
-- ⚡ **RAM asignada por ti** según el rendimiento de tu teléfono.
-- 🌐 **Túnel público automático** para conexión externa.
-- 💻 **Consola y gestión** integradas en la misma aplicación.
-
-> **Sin instalar aplicaciones adicionales.** Sin configuraciones avanzadas de red o forwarding manual.
+</div>
 
 ---
 
-## ✨ Características y Qué Puedes Hacer
+## 馃挕 驴Qu茅 es TaichiX?
 
-| Función | Descripción |
+**TaichiX** convierte tu dispositivo Android en un servidor hosting completo de Minecraft sin depender de **Termux**, **PCs** ni **servicios de pago**.
+
+Creas el servidor, lo inicias y se genera autom谩ticamente una **direcci贸n p煤blica**. Tus amigos pueden conectarse desde cualquier lugar del mundo y desde cualquier red (Wi-Fi o datos m贸viles).
+
+> 馃殌 **Todo en una sola App:** Sin comandos de terminal, sin instalaciones adicionales de dependencias y sin configuraciones complejas de *port forwarding* o router.
+
+---
+
+## 馃摳 Capturas de Pantalla
+
+<div align="center">
+  <table border="0">
+    <tr>
+      <td align="center" width="33%">
+        <b>Panel Principal y Diagn贸stico</b><br><br>
+        <img src="1000054540.jpg" alt="Dashboard" width="250" style="border-radius: 8px;">
+      </td>
+      <td align="center" width="33%">
+        <b>Creaci贸n de Servidor</b><br><br>
+        <img src="1000054542.jpg" alt="Crear Servidor" width="250" style="border-radius: 8px;">
+      </td>
+      <td align="center" width="33%">
+        <b>Tienda de Mods (Modrinth)</b><br><br>
+        <img src="1000054544.jpg" alt="Tienda de Mods" width="250" style="border-radius: 8px;">
+      </td>
+    </tr>
+  </table>
+</div>
+
+---
+
+## 鉁� Caracter铆sticas Principales
+
+| Funci贸n | Descripci贸n |
 | :--- | :--- |
-| **Java Edition** | Servidores Paper (y loaders como Fabric según configuración). |
-| **Bedrock** | PocketMine-MP corriendo en el propio dispositivo. |
-| **Túnel público** | Dirección única para conectar desde cualquier internet. |
-| **Control de RAM** | Eliges libremente cuánta memoria asignas al servidor. |
-| **Consola en vivo** | Visualiza logs y output del proceso dentro de la app. |
-| **Mods / Addons** | Selección al crear el servidor con catálogo y buscador integrado. |
-| **Invitación rápida** | Texto e IP listos para copiar y compartir a tu grupo. |
+| 鈽� **Java Edition** | Soporte para Paper, Fabric, Forge, Quilt y Vanilla. |
+| 馃摫 **Bedrock Edition** | Servidores optimizados PocketMine-MP directamente en el dispositivo. |
+| 馃寪 **T煤nel P煤blico Autom谩tico** | Genera una IP/direcci贸n p煤blica para conectar desde cualquier red externa. |
+| 鈿欙笍 **Gesti贸n de RAM** | Control preciso con barra deslizante y advertencia inteligente de consumo. |
+| 馃摝 **Tienda de Mods / Addons** | Cat谩logo directo integrado con **Modrinth** para buscar y a帽adir mods en un clic. |
+| 馃捇 **Consola en Vivo** | Visualiza logs y ejecuta comandos en tiempo real dentro de la aplicaci贸n. |
+| 馃敆 **Invitaci贸n R谩pida** | Formato de invitaci贸n listo para copiar e ingresar al servidor inmediatamente. |
 
 ---
 
-## 🚀 Cómo se usa
+## 馃殌 Gu铆a R谩pida de Uso
 
-1. **Instala** el APK de TaichiX.
-2. **Crea un servidor** (elige el tipo, versión, RAM y número de jugadores).
-3. **Pulsa Iniciar**.
-4. **Copia la dirección pública** generada por el túnel.
-5. **Compártela con tus amigos** y ¡a jugar!
+1. **Descarga e instala** el archivo APK de TaichiX.
+2. **Crea tu servidor**: Elige entre Java o Bedrock, asigna la RAM, versi贸n y slots de jugadores.
+3. **Instala Mods/Plugins** *(Opcional)*: Utiliza la tienda integrada para personalizar tu mundo.
+4. **Pulsa Iniciar**: El servidor comenzar谩 a ejecutarse y se abrir谩 el t煤nel p煤blico.
+5. **Comparte la IP**: Copia la direcci贸n p煤blica y env铆ala a tus amigos para jugar juntos.
 
-> ℹ️ *La primera vez puede tardar un poco mientras descarga el runtime y los archivos base del servidor. Las siguientes ejecuciones serán mucho más rápidas.*
-
----
-
-## 🎯 ¿Para quién es?
-
-- **Grupos pequeños** que quieren un servidor propio sin pagar un hosting mensual.
-- **Jugadores en Android** que buscan invitar a amigos sin estar conectados a la misma red Wi-Fi.
-- **Amantes de la simplicidad** que prefieren una solución *all-in-one* en lugar de Termux + scripts + túneles a mano.
-
-⚠️ **Requisito realista:** Se recomienda un dispositivo con suficiente memoria RAM. *Java Edition exige más recursos que Bedrock.* Si la RAM es escasa, la app te mostrará un aviso.
+> 鈩癸笍 *Nota:* En la primera ejecuci贸n, la app descargar谩 los runtimes requeridos y archivos base del servidor. Los inicios posteriores ser谩n inmediatos.
 
 ---
 
-## 🔓 Open Source
+## 鈿� Requisitos y Rendimiento
 
-TaichiX es **código abierto** y está pensado para toda la comunidad.
-
-- 📖 Puedes ver el código, usarlo, estudiarlo y mejorarlo libremente.
-- ⚙️ Los archivos APK se construyen de forma pública mediante **GitHub Actions**.
-- 🚫 No existe una versión “cerrada” ni funciones bloqueadas tras un muro de pago.
-
-*¿Quieres contribuir, reportar un fallo o sugerir una nueva función? ¡Siéntete libre de abrir una issue o enviarnos un Pull Request!*
-
----
-
-## 📌 Estado del Proyecto
-
-TaichiX está en **desarrollo activo**.
-
-- [x] UI y flujo interactivo de creación de servidores.
-- [x] Plugin nativo para gestión de procesos, descargas y túneles.
-- [x] Builds automatizados de APK con GitHub Actions.
-- [ ] *En desarrollo:* Mejoras en la estabilidad del arranque nativo.
-- [ ] *En desarrollo:* Runtime Java automático simplificado.
-- [ ] *En desarrollo:* Tienda/catálogo de mods con portadas reales.
-
-> 📦 **Nota de instalación:** Descarga siempre el artefacto del último workflow exitoso. Se recomienda desinstalar la versión previa antes de actualizar.
-
----
-
-## 📋 Identidad Técnica
-
-| Campo | Valor |
+| Requisito | Recomendaci贸n |
 | :--- | :--- |
-| **Nombre** | TaichiX |
-| **Package** | `com.taichix.app` |
-| **Plataforma** | Android |
-| **Licencia / Acceso** | Open Source (Libre para todos) |
+| **Sistemas Operativo** | Android 8.0 o superior |
+| **RAM M铆nima (Bedrock)** | 1 GB disponible |
+| **RAM M铆nima (Java)** | 2 GB+ disponibles |
+
+鈿狅笍 *TaichiX incluye un monitor autom谩tico de recursos que te alertar谩 si la memoria asignada supera los l铆mites recomendados de tu dispositivo.*
 
 ---
 
-<p align="center">
-  <b>TaichiX</b> — <i>Tu servidor de Minecraft, en el bolsillo, abierto al mundo.</i> 🌍🎮
-</p>
+## 馃敁 Open Source y Transparencia
+
+TaichiX es **100% c贸digo abierto** y accesible para todos:
+
+- 馃搨 **C贸digo Libre:** Puedes inspeccionar, auditar, modificar y contribuir al c贸digo fuente.
+- 鈿欙笍 **Compilaciones Transparentes:** Los APKs se construyen p煤blicamente mediante **GitHub Actions**.
+- 馃毇 **Sin Paywalls:** No hay funciones bloqueadas, suscripciones premium ni publicidad invasiva.
+
+---
+
+## 馃搶 Estado del Proyecto & Roadmap
+
+TaichiX se encuentra en **desarrollo activo**:
+
+- [x] UI/UX moderna con soporte para temas oscuros.
+- [x] Motor nativo de descargas, ejecuci贸n de procesos y t煤neles.
+- [x] Integraci贸n con Modrinth para cat谩logo de mods.
+- [x] Automatizaci贸n de builds APK mediante GitHub Actions.
+- [ ] 鈴� *Optimizaci贸n del arranque nativo y consumo de memoria.*
+- [ ] 鈴� *Descarga autom谩tica simplificada del runtime Java.*
+- [ ] 鈴� *Previsualizaci贸n mejorada con portadas en la tienda de mods.*
+
+---
+
+## 馃搵 Especificaciones T茅cnicas
+
+```ini
+Nombre       = TaichiX
+Package ID   = com.taichix.app
+Plataforma   = Android
+Licencia     = Open Source (MIT / GPL)
+```
+
+---
+
+<div align="center">
+
+**TaichiX** 鈥� *Tu servidor de Minecraft, en el bolsillo, abierto al mundo.* 馃實馃幃
+
+</div>
