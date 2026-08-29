@@ -12,63 +12,54 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      # 3. Instalar dependencias
       - name: Install dependencies
         run: npm install
 
-      # 4. Build web
       - name: Build web assets
         run: npm run build
 
-      # 5. Java 21
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      # 6. Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-      
-      # 6.5. Aceptar licencias de Android SDK
+
       - name: Accept Android SDK Licenses
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      # 7. Capacitor Android
-      - name: Add Capacitor Android platform
+      - name: Add Capacitor Android platform + register native plugin
         shell: bash
         run: |
           set -e
 
           npx cap add android || true
 
-          echo "Preparing native plugin directory..."
+          echo "=== Preparando plugin nativo ServerNative ==="
 
+          # 1. Copiar el plugin Java
           mkdir -p android/app/src/main/java/com/taichix/app/plugins
-
           if [ -f "android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java" ]; then
-            cp \
-              android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java \
-              android/app/src/main/java/com/taichix/app/plugins/
-            echo "✅ ServerNativePlugin.java copiado exitosamente"
+            cp android-plugin/src/main/java/com/taichix/app/plugins/ServerNativePlugin.java \
+               android/app/src/main/java/com/taichix/app/plugins/
+            echo "✅ ServerNativePlugin.java copiado"
           else
             echo "❌ ERROR: ServerNativePlugin.java no encontrado"
             exit 1
           fi
 
-          # Crear capacitor.plugins.json para registrar el plugin
+          # 2. Crear capacitor.plugins.json
           mkdir -p android/app/src/main/assets
           cat > android/app/src/main/assets/capacitor.plugins.json << 'EOF'
           [
@@ -82,12 +73,47 @@ jobs:
             }
           ]
           EOF
+          echo "✅ capacitor.plugins.json creado"
 
-          echo "✅ capacitor.plugins.json creado correctamente"
+          # 3. REGISTRAR el plugin en MainActivity (OBLIGATORIO)
+          MAIN_ACTIVITY=$(find android -name "MainActivity.java" | head -1)
+          if [ -z "$MAIN_ACTIVITY" ]; then
+            echo "❌ No se encontró MainActivity.java"
+            find android -name "*.java" | head -20
+            exit 1
+          fi
+          echo "MainActivity encontrado: $MAIN_ACTIVITY"
+
+          if grep -q "ServerNativePlugin" "$MAIN_ACTIVITY"; then
+            echo "✅ Plugin ya estaba registrado en MainActivity"
+          else
+            if grep -q "super.onCreate" "$MAIN_ACTIVITY"; then
+              sed -i '/super\.onCreate/i\        registerPlugin(com.taichix.app.plugins.ServerNativePlugin.class);' "$MAIN_ACTIVITY"
+              echo "✅ registerPlugin añadido antes de super.onCreate"
+            else
+              echo "⚠️ No encontré super.onCreate, revisa MainActivity manualmente"
+            fi
+          fi
+
+          echo "--- Contenido de MainActivity ---"
+          cat "$MAIN_ACTIVITY"
+          echo "--------------------------------"
+
+          # 4. Permisos de red
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+              sed -i '/<manifest/a\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+            fi
+            if ! grep -q 'android:usesCleartextTraffic' "$MANIFEST"; then
+              sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST" || true
+            fi
+            echo "✅ Permisos de red revisados"
+          fi
 
           npx cap sync android
+          echo "✅ cap sync completado"
 
-      # 8. Build APK
       - name: Build debug APK
         working-directory: android
         shell: bash
@@ -95,7 +121,6 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      # 9. Subir APK
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
